@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<o:OAI-PMH xmlns:o="http://www.openarchives.org/OAI/2.0/" xmlns:od="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:d="http://purl.org/dc/elements/1.1/">
+  <o:responseDate>2026-11-06T00:00:00Z</o:responseDate>
+  <o:ListRecords>
+    <o:record>
+      <o:header><o:identifier>oai:galiciana:615025</o:identifier><o:datestamp>2026-01-01</o:datestamp></o:header>
+      <o:metadata><od:dc>
+        <d:title>Crónica &amp; noticias de &lt;Galicia&gt;</d:title>
+        <d:creator>Núñez, José &amp; Compañía</d:creator><d:creator>Vázquez, Ana</d:creator>
+        <d:date>1975</d:date><d:rights>Consulta &amp; estudio</d:rights>
+        <d:identifier>https://biblioteca.galiciana.gal/es/consulta/registro.do?id=615025&amp;presentacion=ficha</d:identifier>
+        <d:identifier>https://biblioteca.galiciana.gal/es/catalogo_imagenes/grupo.do?path=1264535&amp;posicion=15</d:identifier>
+      </od:dc></o:metadata>
+    </o:record>
+    <o:record><o:header status="deleted"><o:identifier>oai:galiciana:deleted</o:identifier></o:header></o:record>
+    <o:resumptionToken>cursor+1&amp;next=dos%2F3</o:resumptionToken>
+  </o:ListRecords>
+</o:OAI-PMH>

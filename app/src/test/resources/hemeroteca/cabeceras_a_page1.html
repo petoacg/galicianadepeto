@@ -1,0 +1,626 @@
+<!doctype html><html><body>
+<form name="form0" action="listar_cabeceras.do"  method='post' onsubmit='return validarCampos(this);' >
+    
+            <input type="hidden" name="letra" value="no" />
+                                    <span class="obligatorio">
+                                
+         
+                                                <label id="label_patron" for="patron">Búsqueda por título: </label>
+                 <span
+                class="valor">
+                    <input type="text" class="texto"
+                name="patron" id="patron"
+                value=''
+                title="Búsqueda por título"
+                 maxlength="25"                                  required                  />
+                </span>                                                   <script>jQuery(document).ready(function(){addCampoValidacion ("patron", "texto", true, "Búsqueda por título");});</script>
+                        </span>
+                                                             <span class="boton_">
+                        <input type="submit" name="" id='boton_' class="submit_boton" onmouseover="cambiarEstilo(this,'submit_boton_over', 'submit_boton', true);" onfocus="cambiarEstilo(this,'submit_boton_over', 'submit_boton', true);" onmouseout="cambiarEstilo(this,'submit_boton_over', 'submit_boton', false);" onblur="cambiarEstilo(this,'submit_boton_over', 'submit_boton', false);" value="Buscar"
+                        >
+                </span>
+                                                                <span class="boton_limpiar">
+                                        <a href="..&#x2f;publicaciones&#x2f;listar_cabeceras.do"             class="boton_texto" id='boton_limpiar'>
+                Limpiar</a>
+                </span>
+            </form>
+<span class="pagina_actual">A</span><span class="pagina_actual">1</span>
+<a class="pre-header__link user icon-text" href="..&#x2f;seguridad&#x2f;form_login.do&#x3f;destination&#x3d;publicaciones&#x25;2Flistar_cabeceras.do&amp;destinationContext&#x3d;public"><span>Iniciar sesión</span></a>
+<a class="pre-header__link languages__link" href="..&#x2f;..&#x2f;gl&#x2f;publicaciones&#x2f;listar_cabeceras.do" hreflang="gl" title="Galego">Galego</a>
+<a href="..&#x2f;publicaciones&#x2f;listar_cabeceras.do"  class="main-nav__sublink"  tabindex="-1">Publicaciones periódicas por títulos</a>
+<a href="..&#x2f;publicaciones&#x2f;listar_cabeceras.do"             class="boton_texto" id='boton_limpiar'>
+                Limpiar</a>
+<a title="Datos que comienzan por caracteres numéricos o no alfabéticos" href="../publicaciones/listar_cabeceras.do?letra=%23&amp;posicion=1" class="boton_texto" id="boton_letra_almohadilla">#</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=B&amp;posicion=1"             class="boton_texto" id='boton_letraB'>
+                B</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=C&amp;posicion=1"             class="boton_texto" id='boton_letraC'>
+                C</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=D&amp;posicion=1"             class="boton_texto" id='boton_letraD'>
+                D</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=E&amp;posicion=1"             class="boton_texto" id='boton_letraE'>
+                E</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=F&amp;posicion=1"             class="boton_texto" id='boton_letraF'>
+                F</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=G&amp;posicion=1"             class="boton_texto" id='boton_letraG'>
+                G</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=H&amp;posicion=1"             class="boton_texto" id='boton_letraH'>
+                H</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=I&amp;posicion=1"             class="boton_texto" id='boton_letraI'>
+                I</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=J&amp;posicion=1"             class="boton_texto" id='boton_letraJ'>
+                J</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=K&amp;posicion=1"             class="boton_texto" id='boton_letraK'>
+                K</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=L&amp;posicion=1"             class="boton_texto" id='boton_letraL'>
+                L</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=M&amp;posicion=1"             class="boton_texto" id='boton_letraM'>
+                M</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=N&amp;posicion=1"             class="boton_texto" id='boton_letraN'>
+                N</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=%C3%91&amp;posicion=1"             class="boton_texto" id='boton_letraNN'>
+                Ñ</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=O&amp;posicion=1"             class="boton_texto" id='boton_letraO'>
+                O</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=P&amp;posicion=1"             class="boton_texto" id='boton_letraP'>
+                P</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=Q&amp;posicion=1"             class="boton_texto" id='boton_letraQ'>
+                Q</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=R&amp;posicion=1"             class="boton_texto" id='boton_letraR'>
+                R</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=S&amp;posicion=1"             class="boton_texto" id='boton_letraS'>
+                S</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=T&amp;posicion=1"             class="boton_texto" id='boton_letraT'>
+                T</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=U&amp;posicion=1"             class="boton_texto" id='boton_letraU'>
+                U</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=V&amp;posicion=1"             class="boton_texto" id='boton_letraV'>
+                V</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=W&amp;posicion=1"             class="boton_texto" id='boton_letraW'>
+                W</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=X&amp;posicion=1"             class="boton_texto" id='boton_letraX'>
+                X</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=Y&amp;posicion=1"             class="boton_texto" id='boton_letraY'>
+                Y</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=Z&amp;posicion=1"             class="boton_texto" id='boton_letraZ'>
+                Z</a>
+<a href="../publicaciones/listar_cabeceras.do?posicion=26"                         class="boton_imagen" id='boton_siguiente'>
+                <img name="siguiente_28" alt="Siguiente" title="Siguiente" src="../../i18n/img/botones/siguiente.gif"></a>
+<a href="../publicaciones/listar_cabeceras.do?posicion=76"                         class="boton_imagen" id='boton_ultimo'>
+                <img name="ultimo_29" alt="Último" title="Último" src="../../i18n/img/botones/ultimo.gif"></a>
+<a href="../publicaciones/listar_cabeceras.do?posicion=26"             class="boton_texto" id='boton_pagina2'>
+                2</a>
+<a href="../publicaciones/listar_cabeceras.do?posicion=51"             class="boton_texto" id='boton_pagina3'>
+                3</a>
+<a href="../publicaciones/listar_cabeceras.do?posicion=76"             class="boton_texto" id='boton_pagina4'>
+                4</a>
+<a href="../publicaciones/listar_cabeceras.do?posicion=26"                         class="boton_imagen" >
+                <img name="siguiente_58" alt="Siguiente" title="Siguiente" src="../../i18n/img/botones/siguiente.gif"></a>
+<a href="../publicaciones/listar_cabeceras.do?posicion=76"                         class="boton_imagen" >
+                <img name="ultimo_59" alt="Último" title="Último" src="../../i18n/img/botones/ultimo.gif"></a>
+<a href="../publicaciones/listar_cabeceras.do?posicion=26"             class="boton_texto" >
+                2</a>
+<a href="../publicaciones/listar_cabeceras.do?posicion=51"             class="boton_texto" >
+                3</a>
+<a href="../publicaciones/listar_cabeceras.do?posicion=76"             class="boton_texto" >
+                4</a>
+<a title="Datos que comienzan por caracteres numéricos o no alfabéticos" href="../publicaciones/listar_cabeceras.do?letra=%23&amp;posicion=1" class="boton_texto" id="boton_letra_almohadilla2">#</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=B&amp;posicion=1"             class="boton_texto" >
+                B</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=C&amp;posicion=1"             class="boton_texto" >
+                C</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=D&amp;posicion=1"             class="boton_texto" >
+                D</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=E&amp;posicion=1"             class="boton_texto" >
+                E</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=F&amp;posicion=1"             class="boton_texto" >
+                F</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=G&amp;posicion=1"             class="boton_texto" >
+                G</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=H&amp;posicion=1"             class="boton_texto" >
+                H</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=I&amp;posicion=1"             class="boton_texto" >
+                I</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=J&amp;posicion=1"             class="boton_texto" >
+                J</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=K&amp;posicion=1"             class="boton_texto" >
+                K</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=L&amp;posicion=1"             class="boton_texto" >
+                L</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=M&amp;posicion=1"             class="boton_texto" >
+                M</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=N&amp;posicion=1"             class="boton_texto" >
+                N</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=%C3%91&amp;posicion=1"             class="boton_texto" >
+                Ñ</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=O&amp;posicion=1"             class="boton_texto" >
+                O</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=P&amp;posicion=1"             class="boton_texto" >
+                P</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=Q&amp;posicion=1"             class="boton_texto" >
+                Q</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=R&amp;posicion=1"             class="boton_texto" >
+                R</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=S&amp;posicion=1"             class="boton_texto" >
+                S</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=T&amp;posicion=1"             class="boton_texto" >
+                T</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=U&amp;posicion=1"             class="boton_texto" >
+                U</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=V&amp;posicion=1"             class="boton_texto" >
+                V</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=W&amp;posicion=1"             class="boton_texto" >
+                W</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=X&amp;posicion=1"             class="boton_texto" >
+                X</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=Y&amp;posicion=1"             class="boton_texto" >
+                Y</a>
+<a href="../publicaciones/listar_cabeceras.do?letra=Z&amp;posicion=1"             class="boton_texto" >
+                Z</a>
+<table class="nav_registros" id='nav_registros' summary="Tabla Publicaciones">
+                <caption>Publicaciones</caption>
+                                
+    <thead>
+        <tr>
+            <th>Nombre</th>
+                            <th class="col_pub_numeros">Números</th>
+                        <th class="col_pub_primernum">Primer número</th>
+            <th class="col_pub_ultimonum">Último número</th>
+                    </tr>
+    </thead>
+                <tbody>                 
+        
+                                    
+                                    
+                                            
+                                    <tr class="nav_registro_impar nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=7241">A.C.G : revista mensual ilustrada del Auto-Aero Club de Galicia : afiliado al Automóvil Club de España</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=1542"             class="boton_texto" id='boton_link_ultimo_num'>
+                44</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">01/03/1932</td>
+        <td class="col_pub_ultimonum">01/08/1941</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_par nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=580699">Abrente : boletín de la Anunciada</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=9042"             class="boton_texto" >
+                13</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">01/10/1929</td>
+        <td class="col_pub_ultimonum">01/05/1944</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_impar nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=7250">Acción : órgano de la Juventud de Acción Popular</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=1522"             class="boton_texto" >
+                1</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">12/02/1936</td>
+        <td class="col_pub_ultimonum">12/02/1936</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_par nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=601228">Acción agraria  : órgano de la Federación del Partido Judicial de Caldas de Reyes</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=10123"             class="boton_texto" >
+                15</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">05/08/1917</td>
+        <td class="col_pub_ultimonum">25/08/1918</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_impar nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=584222">Acción agraria : órgano de los sindicatos católico-agrarios y defensor del progreso moral y material de la comarca de Ortigueira</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=9282"             class="boton_texto" >
+                2</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">30/12/1921</td>
+        <td class="col_pub_ultimonum">10/02/1923</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_par nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=6768">Acción coruñesa : periódico defensor de los intereses de la capital de Galicia</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=802"             class="boton_texto" >
+                82</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">01/11/1920</td>
+        <td class="col_pub_ultimonum">26/06/1922</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_impar nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=3803">Acción gallega : órgano de la Federación de Sociedades Gallegas de Buenos Aires</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=21"             class="boton_texto" >
+                98</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">25/10/1929</td>
+        <td class="col_pub_ultimonum">29/07/1944</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_par nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=2700">Acción obrera : periódico quincenal</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=33"             class="boton_texto" >
+                7</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">06/07/1918</td>
+        <td class="col_pub_ultimonum">20/12/1918</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_impar nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=584340">Acción social : revista, órgano del "Centro de Acción Social Católica"</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=9602"             class="boton_texto" >
+                135</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">01/11/1918</td>
+        <td class="col_pub_ultimonum">15/11/1924</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_par nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=7675">Acorazado España : recuerdo de la botadura</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=2142"             class="boton_texto" >
+                1</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">05/02/1912</td>
+        <td class="col_pub_ultimonum">05/02/1912</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_impar nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=9014">La actualidad : diario de Pontevedra</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=2542"             class="boton_texto" >
+                75</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">18/07/1895</td>
+        <td class="col_pub_ultimonum">17/10/1895</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_par nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=577505">Adelante : semanario republicano</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=5223"             class="boton_texto" >
+                1</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">25/05/1930</td>
+        <td class="col_pub_ultimonum">25/05/1930</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_impar nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=3861">El adelanto : periódico quincenal independiente</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=98"             class="boton_texto" >
+                2</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">06/04/1913</td>
+        <td class="col_pub_ultimonum">04/05/1913</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_par nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=9015">El adelanto : semanario defensor de intereses generales de Galicia</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=2502"             class="boton_texto" >
+                7</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">18/09/1882</td>
+        <td class="col_pub_ultimonum">29/10/1882</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_impar nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=7676">Adiante : semanario d'a Mocedade Galeguista</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=2123"             class="boton_texto" >
+                1</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">05/01/1933</td>
+        <td class="col_pub_ultimonum">05/01/1933</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_par nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=601230">El agrario : órgano de la Federación Municipal</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=10124"             class="boton_texto" >
+                11</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">15/12/1918</td>
+        <td class="col_pub_ultimonum">15/06/1919</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_impar nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=601247">El agrario : órgano de los agrarios de la Comarca</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=10186"             class="boton_texto" >
+                1</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">13/07/1919</td>
+        <td class="col_pub_ultimonum">13/07/1919</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_par nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=615029">El agrario : órgano oficial del Centro Protección Agrícola de Salceda</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=10242"             class="boton_texto" >
+                64</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">01/08/1918</td>
+        <td class="col_pub_ultimonum">15/03/1926</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_impar nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=3806">Agro : boletín de divulgación de la Cámara Oficial Sindical Agraria de Pontevedra, órgano de las Hermandades Sindicales de Labradores y Ganaderos de la provincia</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=22"             class="boton_texto" >
+                18</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">20/02/1946</td>
+        <td class="col_pub_ultimonum">15/12/1946</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_par nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=601266">El agro  : periódico de izquierdas, órgano de la Sociedad Agraria de Castro Caldelas</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=10362"             class="boton_texto" >
+                1</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">17/07/1931</td>
+        <td class="col_pub_ultimonum">17/07/1931</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_impar nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=579869">El agro : semanario independiente</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=6602"             class="boton_texto" >
+                23</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">01/06/1930</td>
+        <td class="col_pub_ultimonum">23/11/1930</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_par nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=16601">El agro celta : decenario defensor de los intereses agrarios</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=2923"             class="boton_texto" >
+                9</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">03/01/1926</td>
+        <td class="col_pub_ultimonum">23/03/1926</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_impar nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=3807">Agua va : gota periódica</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=23"             class="boton_texto" >
+                1</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">28/11/1886</td>
+        <td class="col_pub_ultimonum">28/11/1886</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_par nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=9058">El Aguinaldo : revista anual, gastronómica, culinaria y de interés particular que El Buscapié regala a sus abonados</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=2562"             class="boton_texto" >
+                1</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">24/12/1867</td>
+        <td class="col_pub_ultimonum">24/12/1867</td>
+                        
+                                    </tr>
+                                                            
+                                    <tr class="nav_registro_impar nav_registro">
+                
+                                    
+                    <td>
+                                    <a href="../consulta/registro.do?id=602574">¡Ahora! : semanario republicano [de] política, cultura, información</a>
+                            </td>
+                            <td class="col_pub_numeros">
+                                                                   <span class="enlace_profundizacion">                                            <span class="boton_link_ultimo_num">
+                                        <a href="../publicaciones/numeros_por_mes.do?idPublicacion=10203"             class="boton_texto" >
+                1</a>
+                </span>
+</span>
+                                                    </td>
+                            <td class="col_pub_primernum">16/03/1930</td>
+        <td class="col_pub_ultimonum">16/03/1930</td>
+                        
+                                    </tr>
+                                                </tbody>                
+            </table>
+</body></html>
