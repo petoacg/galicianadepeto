@@ -1,0 +1,1 @@
+El código de Android pasa a GPLv3. El aviso legal explica las condiciones de reutilización de los recursos de Galiciana.

@@ -1,0 +1,1 @@
+Android source code is now licensed under GPLv3. The legal notice explains the terms for reusing Galiciana resources.

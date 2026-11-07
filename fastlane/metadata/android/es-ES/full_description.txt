@@ -1,0 +1,5 @@
+Galiciana de Peto es una aplicación independiente para investigar publicaciones digitalizadas de Galiciana, la Biblioteca Dixital de Galicia.
+
+Busca en la hemeroteca, lee las páginas originales con resaltado OCR y organiza tus hallazgos con favoritos, carpetas y notas de referencia. Exporta y restaura los datos de investigación mediante una copia ZIP.
+
+La búsqueda y la consulta de documentos requieren conexión con Galiciana. Los favoritos y las notas se guardan en el dispositivo. Los derechos de cada documento figuran en su ficha original.

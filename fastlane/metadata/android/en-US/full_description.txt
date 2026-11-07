@@ -1,0 +1,5 @@
+Galiciana de Peto is an independent app for researching digitized publications from Galiciana, the Digital Library of Galicia.
+
+Search the newspaper archive, read original pages with OCR highlights, and organize findings with bookmarks, folders and reference notes. Export and restore your research data as a ZIP backup.
+
+Document searches and viewing require an internet connection to Galiciana. Bookmarks and notes are stored on the device. The rights of each document are listed in its source record.
