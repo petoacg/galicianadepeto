@@ -18,4 +18,4 @@ La consulta de documentos requiere conexión y depende del servicio de Galiciana
 
 ## Licencia y contacto
 
-Código original © 2026 **petocg**, bajo [CC BY-NC 4.0](LICENSE). Contacto: **petoacg@gmail.com**. Los componentes de terceros conservan sus licencias. Los documentos y datos de Galiciana se rigen por los derechos y condiciones de cada recurso. Consulta el aviso legal dentro de la app.
+Código original de Android © 2026 **petocg**, bajo [GPL-3.0-only](LICENSE). Contacto: **petoacg@gmail.com**. Los componentes de terceros conservan sus licencias. Los documentos y datos de Galiciana se rigen por los derechos y condiciones de cada recurso. Consulta el aviso legal dentro de la app.
