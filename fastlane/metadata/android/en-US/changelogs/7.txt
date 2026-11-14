@@ -1,0 +1,1 @@
+Galician interface by default, Spanish optional. Viewer: list of pages with matches, arrows that jump between pages and a marker for the active match. Saved pages with a single row of folders. Simpler search form, saving several pages at once, A–Z index in the newspaper archive and clearer error messages.

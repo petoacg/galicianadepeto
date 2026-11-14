@@ -1,5 +1,11 @@
 package gal.galiciana.app.ui.fav
 
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.MoreVert
+import gal.galiciana.app.i18n.tr
+import gal.galiciana.app.ui.friendlyError
+
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -13,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +34,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -43,7 +55,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.TextField
 import gal.galiciana.app.ui.MatteShape
 import gal.galiciana.app.ui.matteFieldColors
-import gal.galiciana.app.ui.theme.MatteFill
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -73,10 +84,12 @@ import gal.galiciana.app.ui.search.ResultHitRow
 import gal.galiciana.app.ui.search.SearchViewModel
 import gal.galiciana.app.ui.search.hitMatchesQuery
 import gal.galiciana.app.ui.search.sortGroups
-import gal.galiciana.app.ui.theme.GalicianaBlue
 import gal.galiciana.app.ui.viewer.fetchFullGalicianaPage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.foundation.background
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -92,6 +105,7 @@ class FavoritesBrowseState(val saved: org.json.JSONObject = org.json.JSONObject(
     val sessionSeen = mutableStateOf(setOf<String>())
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FavScreen(
     onBackup: () -> Unit = {},
@@ -111,7 +125,6 @@ fun FavScreen(
     var notesOnly by browseState.notesOnly
     var sortBy by browseState.sortBy
     var sortAsc by browseState.sortAsc
-    var showFolders by rememberSaveable { mutableStateOf(false) }
     var sortMenuOpen by remember { mutableStateOf(false) }
     var selecting by remember { mutableStateOf(false) }
     var picked by remember { mutableStateOf(setOf<String>()) }
@@ -124,9 +137,12 @@ fun FavScreen(
     var sessionSeen by browseState.sessionSeen
     var openFolder by browseState.openFolder
     var newFolder by remember { mutableStateOf(false) }
-    var newFolderName by remember { mutableStateOf("") }
+    var newFolderName by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
     var folderTick by remember { mutableStateOf(0) }
     var pendingDelete by remember { mutableStateOf<String?>(null) }
+    var renaming by remember { mutableStateOf<String?>(null) }
+    var renameName by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var renameError by remember { mutableStateOf(false) }
     val folderNames = remember(hits, folderTick) { store.folders() }
     val scope = rememberCoroutineScope()
     val storageNotice = remember(hits) { store.favoritesStorageNotice() }
@@ -181,7 +197,7 @@ fun FavScreen(
                             else {
                                 val imageId = hit.imageId ?: pagesByPath.getOrPut(path) {
                                     MetsRepository().load(path).pages.associate { it.position to it.imageId }
-                                }[position] ?: error("Imagen no identificada")
+                                }[position] ?: error(tr("Imaxe non identificada", "Imagen no identificada"))
                                 fetchFullGalicianaPage(path, position, imageId)
                             }
                             if (document != null) {
@@ -196,22 +212,22 @@ fun FavScreen(
                         throw e
                     } catch (e: Exception) {
                         failed++
-                        lastFailure = e.message
+                        lastFailure = friendlyError(e)
                     }
                     downloadProgress = index + 1 to selected.size
                 }
                 if (document != null && saved > 0) withContext(Dispatchers.IO) { document.save(ctx) }
                 } finally { document?.close() }
-                downloadMessage = (if (combined && saved == 0) "No se pudo crear el PDF: ninguna página descargada"
-                    else if (combined) "$saved páginas en un PDF guardado en ${gal.galiciana.app.data.downloadLocation(PageFormat.PDF, android.os.Build.VERSION.SDK_INT)}"
-                    else "$saved páginas guardadas en ${gal.galiciana.app.data.downloadLocation(format, android.os.Build.VERSION.SDK_INT)}") +
-                    (if (combined && withOcr < saved) " · OCR disponible en $withOcr de $saved páginas" else "") +
-                    (if (failed > 0) " · $failed sin descargar${lastFailure?.let { ": $it" }.orEmpty()}" else "")
+                downloadMessage = (if (combined && saved == 0) tr("Non se puido crear o PDF: ningunha páxina descargada", "No se pudo crear el PDF: ninguna página descargada")
+                    else if (combined) tr("$saved páxinas nun PDF gardado en ${gal.galiciana.app.data.downloadLocation(PageFormat.PDF, android.os.Build.VERSION.SDK_INT)}", "$saved páginas en un PDF guardado en ${gal.galiciana.app.data.downloadLocation(PageFormat.PDF, android.os.Build.VERSION.SDK_INT)}")
+                    else tr("$saved páxinas gardadas en ${gal.galiciana.app.data.downloadLocation(format, android.os.Build.VERSION.SDK_INT)}", "$saved páginas guardadas en ${gal.galiciana.app.data.downloadLocation(format, android.os.Build.VERSION.SDK_INT)}")) +
+                    (if (combined && withOcr < saved) tr(" · OCR dispoñible en $withOcr de $saved páxinas", " · OCR disponible en $withOcr de $saved páginas") else "") +
+                    (if (failed > 0) tr(" · $failed sen descargar${lastFailure?.let { ": $it" }.orEmpty()}", " · $failed sin descargar${lastFailure?.let { ": $it" }.orEmpty()}") else "")
             } catch (_: CancellationException) {
-                downloadMessage = if (combined) "Descarga detenida: no se guardó el PDF único"
-                    else "Descarga detenida: $saved guardadas, $failed fallidas"
+                downloadMessage = if (combined) tr("Descarga detida: non se gardou o PDF único", "Descarga detenida: no se guardó el PDF único")
+                    else tr("Descarga detida: $saved gardadas, $failed fallidas", "Descarga detenida: $saved guardadas, $failed fallidas")
             } catch (e: Exception) {
-                downloadMessage = "No se pudo guardar el PDF único: ${e.message.orEmpty()}"
+                downloadMessage = tr("Non se puido gardar o PDF único. ${friendlyError(e)}", "No se pudo guardar el PDF único. ${friendlyError(e)}")
             } finally {
                 downloading = false
                 downloadJob = null
@@ -228,11 +244,11 @@ fun FavScreen(
                 withContext(Dispatchers.IO) {
                     val text = gal.galiciana.app.data.ResearchDossier.markdown(entries)
                     ctx.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter(Charsets.UTF_8)?.use { it.write(text) }
-                        ?: error("No se pudo escribir el dossier.")
+                        ?: error(tr("Non se puido escribir o dossier.", "No se pudo escribir el dossier."))
                 }
-                downloadMessage = "Dossier guardado con ${entries.size} referencias."
+                downloadMessage = tr("Dossier gardado con ${entries.size} referencias.", "Dossier guardado con ${entries.size} referencias.")
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { downloadMessage = "No se pudo exportar el dossier: ${e.message.orEmpty()}" }
+            catch (e: Exception) { downloadMessage = tr("Non se puido exportar o dossier. ${friendlyError(e)}", "No se pudo exportar el dossier. ${friendlyError(e)}") }
         }
     }
 
@@ -244,8 +260,9 @@ fun FavScreen(
     }
     val filtered = remember(filteredAll, openFolder, hits, folderTick, notesOnly) {
         val tag = openFolder
-        if (tag.isNullOrBlank() && notesOnly) filteredAll
-        else if (tag.isNullOrBlank()) {
+        // No folder chosen means every saved page: nothing filed elsewhere looks lost.
+        if (tag.isNullOrBlank()) filteredAll
+        else if (tag.equals("Archivador general", true)) {
             filteredAll.filter {
                 val fs = store.foldersOf(it.path, it.position)
                 fs.isEmpty() || fs.any { f -> f.equals("Archivador general", true) }
@@ -262,14 +279,36 @@ fun FavScreen(
         picked = picked.intersect(visibleKeys)
     }
 
+    var archiveMenu by remember { mutableStateOf(false) }
+    fun exportReferences() {
+        val selected = if (picked.isEmpty()) filtered else filtered.filter { "${it.path}|${it.position ?: 1}" in picked }
+        dossierEntries = selected.filter { !it.path.isNullOrBlank() }.map { hit ->
+            gal.galiciana.app.data.DossierEntry(hit.title, hit.path!!, hit.position ?: 1,
+                store.noteOf(hit.path, hit.position), hit.savedQuery, store.foldersOf(hit.path, hit.position))
+        }
+        dossierExport.launch("galiciana-de-peto-referencias.md")
+    }
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
-            SectionBar("Guardados", GalicianaBlue, onBack = onHome, onHome = onHome)
+            SectionBar(tr("Gardados", "Guardados"), MaterialTheme.colorScheme.primary, onBack = onHome, onHome = onHome, showBack = false) {
+                // Data tasks sit in the bar menu so the list starts higher, also in landscape.
+                Box {
+                    IconButton(onClick = { archiveMenu = true }) {
+                        Icon(androidx.compose.material.icons.Icons.Filled.MoreVert, tr("Máis accións de Gardados", "Más acciones de Guardados"))
+                    }
+                    androidx.compose.material3.DropdownMenu(expanded = archiveMenu, onDismissRequest = { archiveMenu = false }) {
+                        androidx.compose.material3.DropdownMenuItem(text = { Text(tr("Copia dos teus datos", "Copia de tus datos")) },
+                            onClick = { archiveMenu = false; onBackup() })
+                        androidx.compose.material3.DropdownMenuItem(text = { Text("Exportar referencias") },
+                            enabled = filtered.isNotEmpty(), onClick = { archiveMenu = false; exportReferences() })
+                    }
+                }
+            }
             if (chooseDownloadFormat) {
                 AlertDialog(
                     onDismissRequest = { chooseDownloadFormat = false },
-                    title = { Text("Descargar ${picked.size} páginas") },
-                    text = { Text("Elige JPEG por página, PDF por página o un PDF único con las páginas seleccionadas. El PDF incluye el OCR disponible para buscar o copiar, sin selección alineada con la imagen.") },
+                    title = { Text(tr("Descargar ${picked.size} páxinas", "Descargar ${picked.size} páginas")) },
+                    text = { Text(tr("Elixe JPEG por páxina, PDF por páxina ou un PDF único coas páxinas seleccionadas. O PDF inclúe o OCR dispoñible para buscar ou copiar, sen selección aliñada coa imaxe.", "Elige JPEG por página, PDF por página o un PDF único con las páginas seleccionadas. El PDF incluye el OCR disponible para buscar o copiar, sin selección alineada con la imagen.")) },
                     confirmButton = {
                         Column {
                             TextButton(onClick = {
@@ -298,18 +337,7 @@ fun FavScreen(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.bodySmall)
             }
-            Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
-                    TextButton(onClick = onBackup) { Text("Copia de tus datos") }
-                    TextButton(onClick = {
-                        val selected = if (picked.isEmpty()) filtered else filtered.filter { "${it.path}|${it.position ?: 1}" in picked }
-                        dossierEntries = selected.filter { !it.path.isNullOrBlank() }.map { hit ->
-                            gal.galiciana.app.data.DossierEntry(hit.title, hit.path!!, hit.position ?: 1,
-                                store.noteOf(hit.path, hit.position), hit.savedQuery, store.foldersOf(hit.path, hit.position))
-                        }
-                        dossierExport.launch("galiciana-de-peto-referencias.md")
-                    }, enabled = filtered.isNotEmpty()) { Text("Exportar referencias") }
-                }
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
                 gal.galiciana.app.ui.ClearableField(
                     value = q,
                     onValueChange = {
@@ -318,27 +346,24 @@ fun FavScreen(
                             scope.launch { listState.scrollToItem(0) }
                         }
                     },
-                    placeholder = "Buscar páginas y notas",
+                    placeholder = tr("Buscar páxinas e notas", "Buscar páginas y notas"),
                     imeSearch = true,
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = !notesOnly, onClick = { notesOnly = false }, label = { Text("Páginas") })
-                    FilterChip(selected = notesOnly, onClick = { notesOnly = true; openFolder = null },
-                        label = { Text("Notas de referencia") })
+                    gal.galiciana.app.ui.SelectChip(selected = !notesOnly, onClick = { notesOnly = false }, label = { Text(tr("Páxinas", "Páginas")) })
+                    gal.galiciana.app.ui.SelectChip(selected = notesOnly, onClick = { notesOnly = true; openFolder = null },
+                        label = { Text(tr("Notas", "Notas"), maxLines = 1) },
+                        modifier = Modifier.semantics { contentDescription = "Notas de referencia" })
                 }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { showFolders = !showFolders }, modifier = Modifier.weight(1f)) {
-                        Text("Carpetas: ${openFolder ?: if (notesOnly) "Todas las notas" else "Archivador general"}",
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    if (showFolders) TextButton(onClick = { newFolder = true }) { Text("Nueva") }
-                }
-                if (showFolders) LazyRow(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 8.dp), state = folderListState) {
+                // Folders are the navigator itself: one scrolling row, always in view. The open
+                // folder's own chip carries rename and delete, so they never sit beside everything else.
+                LazyRow(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp), state = folderListState) {
                     item {
                         FolderChip(
-                            name = if (notesOnly) "Todas las notas" else "Archivador general",
+                            name = if (notesOnly) tr("Todas as notas", "Todas las notas") else tr("Todas as páxinas", "Todas las páginas"),
                             selected = openFolder == null,
+                            showIcon = false,
                             onClick = {
                                 if (openFolder != null) {
                                     openFolder = null
@@ -347,7 +372,19 @@ fun FavScreen(
                             },
                         )
                     }
-                    items(folderNames.filterNot { it.equals("Archivador general", true) }) { name ->
+                    if (!notesOnly) item {
+                        FolderChip(
+                            name = gal.galiciana.app.i18n.folderLabel("Archivador general"),
+                            selected = openFolder.equals("Archivador general", true),
+                            onClick = {
+                                if (!openFolder.equals("Archivador general", true)) {
+                                    openFolder = "Archivador general"
+                                    scope.launch { listState.scrollToItem(0) }
+                                }
+                            },
+                        )
+                    }
+                    items(folderNames.filterNot { it.equals("Archivador general", true) }, key = { it.lowercase() }) { name ->
                         FolderChip(
                             name = name,
                             selected = openFolder == name,
@@ -357,35 +394,42 @@ fun FavScreen(
                                     scope.launch { listState.scrollToItem(0) }
                                 }
                             },
-                            onLongClick = { pendingDelete = name },
+                            onRename = { renameName = name; renameError = false; renaming = name },
+                            onDelete = { pendingDelete = name },
                         )
                     }
                     item {
                         FolderChip(
-                            name = "Nueva",
+                            name = tr("Novo", "Nueva"),
                             selected = false,
                             onClick = { newFolder = true },
                             plus = true,
+                            showIcon = false,
                         )
                     }
                 }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${filtered.size} ${if (filtered.size == 1) "página" else "páginas"}",
-                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
+                    Text("${filtered.size} " + if (notesOnly) (if (filtered.size == 1) "nota" else "notas") else (if (filtered.size == 1) tr("páxina", "página") else tr("páxinas", "páginas")),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.align(Alignment.CenterVertically).semantics { liveRegion = LiveRegionMode.Polite })
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                     Box {
-                        TextButton(onClick = { sortMenuOpen = true }) {
+                        TextButton(modifier = Modifier.heightIn(min = 48.dp), onClick = { sortMenuOpen = true }) {
                             Text(when (sortBy) {
                                 SearchViewModel.SortBy.Titulo -> "Título"
                                 SearchViewModel.SortBy.Autor -> "Autor"
-                                SearchViewModel.SortBy.Fecha -> "Fecha"
+                                SearchViewModel.SortBy.Fecha -> tr("Data", "Fecha")
                                 SearchViewModel.SortBy.Relevancia -> "Relevancia"
-                            } + if (sortAsc) " ↑" else " ↓")
+                            })
+                            Icon(if (sortAsc) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                                if (sortAsc) "ascendente" else "descendente",
+                                Modifier.padding(start = 4.dp).size(18.dp))
                         }
                         DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
                             listOf(SearchViewModel.SortBy.Titulo to "Título", SearchViewModel.SortBy.Autor to "Autor",
-                                SearchViewModel.SortBy.Fecha to "Fecha", SearchViewModel.SortBy.Relevancia to "Relevancia").forEach { (key, label) ->
-                                DropdownMenuItem(text = { Text(label + if (sortBy == key)
-                                    (if (sortAsc) " · ascendente" else " · descendente") else "") }, onClick = {
+                                SearchViewModel.SortBy.Fecha to tr("Data", "Fecha"), SearchViewModel.SortBy.Relevancia to "Relevancia").forEach { (key, label) ->
+                                gal.galiciana.app.ui.SortMenuItem(label, active = sortBy == key,
+                                    detail = if (sortAsc) "ascendente" else "descendente", onClick = {
                                     if (sortBy == key) sortAsc = !sortAsc
                                     else { sortBy = key; sortAsc = key != SearchViewModel.SortBy.Fecha && key != SearchViewModel.SortBy.Relevancia }
                                     sortMenuOpen = false
@@ -394,18 +438,20 @@ fun FavScreen(
                             }
                         }
                     }
-                    TextButton(enabled = !downloading && (selecting || filtered.isNotEmpty()), onClick = {
+                    TextButton(modifier = Modifier.heightIn(min = 48.dp), enabled = !downloading && (selecting || filtered.isNotEmpty()), onClick = {
                         selecting = !selecting
                         if (!selecting) picked = emptySet()
                     }) { Text(if (selecting) "Cancelar" else "Seleccionar") }
+                    }
                 }
                 if (filtered.isEmpty() && storageNotice == null) {
                     Text(
                         when {
-                            notesOnly -> "Todavía no hay notas de referencia que coincidan. Puedes añadir una desde cualquier página del visor."
-                            hits.isEmpty() -> "Todavía no has guardado páginas. Pulsa la vieira de un resultado para añadirlo al archivo."
-                            q.isNotBlank() -> "No hay coincidencias en esta carpeta. Borra el filtro o consulta otra carpeta."
-                            else -> "Esta carpeta no contiene páginas. Usa el icono de carpeta de un favorito para organizarlo aquí."
+                            notesOnly -> tr("Aínda non hai notas de referencia que coincidan. Podes engadir unha desde calquera páxina do visor.", "Todavía no hay notas de referencia que coincidan. Puedes añadir una desde cualquier página del visor.")
+                            hits.isEmpty() -> tr("Aínda non gardaches páxinas. Preme a vieira dun resultado para gardalo aquí.", "Todavía no has guardado páginas. Pulsa la vieira de un resultado para guardarlo aquí.")
+                            q.isNotBlank() && openFolder == null -> tr("Ningunha páxina gardada coincide con ese filtro.", "Ninguna página guardada coincide con ese filtro.")
+                            q.isNotBlank() -> tr("Non hai coincidencias neste cartafol. Borra o filtro ou consulta outro cartafol.", "No hay coincidencias en esta carpeta. Borra el filtro o consulta otra carpeta.")
+                            else -> tr("Este cartafol non contén páxinas. Usa a icona de cartafol dunha páxina gardada para organizala aquí.", "Esta carpeta no contiene páginas. Usa el icono de carpeta de una página guardada para organizarla aquí.")
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -416,7 +462,7 @@ fun FavScreen(
             if (selecting) {
                 TextButton(enabled = !downloading && filtered.isNotEmpty(), onClick = {
                     picked = filtered.map { "${it.path}|${it.position ?: 1}" }.toSet()
-                }, modifier = Modifier.padding(horizontal = 20.dp)) { Text("Seleccionar todos (${filtered.size})") }
+                }, modifier = Modifier.padding(horizontal = 20.dp).heightIn(min = 48.dp)) { Text("Seleccionar todos (${filtered.size})") }
             }
             if (selecting) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
@@ -425,7 +471,7 @@ fun FavScreen(
                         modifier = Modifier.weight(1f)) { Text("Descargar (${picked.size})") }
                     Spacer(Modifier.width(8.dp))
                     OutlinedButton(onClick = { askBulk = true },
-                        enabled = picked.isNotEmpty() && !downloading && !notesOnly) { Text("Borrar") }
+                        enabled = picked.isNotEmpty() && !downloading && !notesOnly) { Text("Quitar") }
                 }
             }
             if (downloading) {
@@ -434,9 +480,9 @@ fun FavScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp))
                 Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text("Descargando $done/$total páginas", modifier = Modifier.weight(1f),
+                    Text(tr("Descargando $done/$total páxinas", "Descargando $done/$total páginas"), modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyMedium)
-                    TextButton(onClick = { downloadJob?.cancel() }) { Text("Cancelar") }
+                    TextButton(modifier = Modifier.heightIn(min = 48.dp), onClick = { downloadJob?.cancel() }) { Text("Cancelar") }
                 }
             }
             downloadMessage?.let { message ->
@@ -504,12 +550,33 @@ fun FavScreen(
                     }
                 }
             }
+            renaming?.let { target ->
+                AlertDialog(
+                    onDismissRequest = { renaming = null },
+                    title = { Text(tr("Renomear cartafol", "Renombrar carpeta")) },
+                    text = {
+                        TextField(value = renameName, onValueChange = { renameName = it; renameError = false },
+                            singleLine = true, label = { Text(tr("Nome do cartafol", "Nombre de la carpeta")) }, isError = renameError,
+                            supportingText = if (renameError) { { Text(tr("Xa existe un cartafol con ese nome.", "Ya existe una carpeta con ese nombre.")) } } else null)
+                    },
+                    confirmButton = {
+                        TextButton(enabled = renameName.isNotBlank(), onClick = {
+                            if (store.renameFolder(target, renameName)) {
+                                openFolder = renameName.trim()
+                                folderTick++
+                                renaming = null
+                            } else renameError = true
+                        }) { Text(tr("Renomear", "Renombrar")) }
+                    },
+                    dismissButton = { TextButton(onClick = { renaming = null }) { Text("Cancelar") } },
+                )
+            }
             if (newFolder) {
                 androidx.compose.material3.AlertDialog(
                     onDismissRequest = { newFolder = false },
-                    title = { Text("Nueva carpeta") },
+                    title = { Text(tr("Novo cartafol", "Nueva carpeta")) },
                     text = {
-                        TextField(value = newFolderName, onValueChange = { newFolderName = it }, singleLine = true, placeholder = { Text("Nombre") })
+                        TextField(value = newFolderName, onValueChange = { newFolderName = it }, singleLine = true, label = { Text(tr("Nome do cartafol", "Nombre de la carpeta")) })
                     },
                     confirmButton = {
                         androidx.compose.material3.TextButton(onClick = {
@@ -519,7 +586,14 @@ fun FavScreen(
                             newFolder = false
                             folderTick++
                             hits = store.favHits()
-                            scope.launch { listState.scrollToItem(0) }
+                            val created = openFolder
+                            scope.launch {
+                                listState.scrollToItem(0)
+                                // Bring the new folder's chip into view: "Todas", "Arquivador xeral", then yours.
+                                val custom = store.folders().filterNot { it.equals("Archivador general", true) }
+                                val at = custom.indexOfFirst { it == created }
+                                if (at >= 0) folderListState.animateScrollToItem(at + if (notesOnly) 1 else 2)
+                            }
                         }, enabled = newFolderName.isNotBlank()) { Text("Crear") }
                     },
                     dismissButton = {
@@ -530,8 +604,8 @@ fun FavScreen(
             pendingDelete?.let { target ->
                 AlertDialog(
                     onDismissRequest = { pendingDelete = null },
-                    title = { Text("Borrar carpeta") },
-                    text = { Text("¿Borrar «$target»? Las páginas se conservan en sus otras carpetas; las que no tengan ninguna pasarán al archivador general.") },
+                    title = { Text(tr("Eliminar cartafol", "Eliminar carpeta")) },
+                    text = { Text(tr("Eliminar «$target»? As páxinas consérvanse nos seus outros cartafoles; as que non teñan ningún pasarán ao arquivador xeral.", "¿Eliminar «$target»? Las páginas se conservan en sus otras carpetas; las que no tengan ninguna pasarán al archivador general.")) },
                     confirmButton = {
                         TextButton(onClick = {
                             store.removeFolder(target)
@@ -539,7 +613,7 @@ fun FavScreen(
                             folderTick++
                             hits = store.favHits()
                             pendingDelete = null
-                        }) { Text("Borrar") }
+                        }) { Text("Eliminar", color = MaterialTheme.colorScheme.error) }
                     },
                     dismissButton = {
                         TextButton(onClick = { pendingDelete = null }) { Text("Cancelar") }
@@ -549,8 +623,8 @@ fun FavScreen(
             if (askBulk) {
                 androidx.compose.material3.AlertDialog(
                     onDismissRequest = { askBulk = false },
-                    title = { Text("Borrar seleccionados") },
-                    text = { Text("Vas a quitar ${picked.size} páginas de Favoritos. No se pueden deshacer.") },
+                    title = { Text(if (picked.size == 1) tr("Quitar 1 páxina de Gardados", "Quitar 1 página de Guardados") else tr("Quitar ${picked.size} páxinas de Gardados", "Quitar ${picked.size} páginas de Guardados")) },
+                    text = { Text(tr("Deixarán de aparecer en Gardados. As súas Notas de referencia consérvanse e seguen na lapela Notas de referencia.", "Dejarán de aparecer en Guardados. Sus Notas de referencia se conservan y siguen en la pestaña Notas de referencia.")) },
                     confirmButton = {
                         androidx.compose.material3.TextButton(onClick = {
                             store.removeHits(picked)
@@ -558,7 +632,7 @@ fun FavScreen(
                             picked = emptySet()
                             selecting = false
                             askBulk = false
-                        }) { Text("Borrar") }
+                        }) { Text("Quitar", color = MaterialTheme.colorScheme.error) }
                     },
                     dismissButton = {
                         androidx.compose.material3.TextButton(onClick = { askBulk = false }) { Text("Cancelar") }
@@ -577,46 +651,78 @@ private fun FolderChip(
     onClick: () -> Unit,
     showIcon: Boolean = true,
     plus: Boolean = false,
-    onLongClick: (() -> Unit)? = null,
+    onRename: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     val isSelected = selected
-    Row(
-        Modifier
-            .padding(end = 8.dp)
-            .widthIn(max = 240.dp)
-            .heightIn(min = 48.dp)
-            .semantics {
-                contentDescription = name
-                this.selected = isSelected
+    val hasMenu = onRename != null || onDelete != null
+    var menuOpen by remember { mutableStateOf(false) }
+    val menuLabel = tr("Opcións do cartafol", "Opciones de la carpeta")
+    Box(Modifier.padding(end = 8.dp)) {
+        Row(
+            Modifier
+                .widthIn(max = 240.dp)
+                .heightIn(min = 48.dp)
+                .semantics {
+                    contentDescription = name
+                    this.selected = isSelected
+                }
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else androidx.compose.ui.graphics.Color.Transparent,
+                    RoundedCornerShape(8.dp),
+                )
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    shape = RoundedCornerShape(8.dp),
+                )
+                .then(
+                    // Tapping the open folder again, or long-pressing any of yours, shows its options.
+                    if (hasMenu) Modifier.combinedClickable(role = Role.Button,
+                        onClickLabel = if (selected) menuLabel else null,
+                        onClick = { if (selected) menuOpen = true else onClick() },
+                        onLongClickLabel = menuLabel, onLongClick = { menuOpen = true })
+                    else Modifier.clickable(role = Role.Button, onClick = onClick)
+                )
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (selected) {
+                Icon(Icons.Filled.Check, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
             }
-            .border(
-                width = if (selected) 1.6.dp else 1.dp,
-                color = if (selected) GalicianaBlue else Color(0xFFB8C0C6),
-                shape = RoundedCornerShape(6.dp),
-            )
-            .then(
-                if (onLongClick != null) Modifier.combinedClickable(role = Role.Button,
-                    onClick = onClick, onLongClickLabel = "Borrar carpeta", onLongClick = onLongClick)
-                else Modifier.clickable(role = Role.Button, onClick = onClick)
-            )
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (plus) {
-            Text("+", color = GalicianaBlue, style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.width(4.dp))
+            if (plus) {
+                Icon(androidx.compose.material.icons.Icons.Outlined.CreateNewFolder, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+            }
+            if (showIcon) {
+                Icon(
+                    Icons.Filled.Folder,
+                    contentDescription = null,
+                    tint = gal.galiciana.app.ui.theme.FolderAmber,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(name, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
+            if (hasMenu && selected) Icon(Icons.Filled.ArrowDropDown, contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 2.dp).size(20.dp))
         }
-        if (showIcon) {
-            Icon(
-                Icons.Filled.Folder,
-                contentDescription = null,
-                tint = Color(0xFFE6C27A),
-                modifier = Modifier.size(16.dp),
-            )
-            Spacer(Modifier.width(6.dp))
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            onRename?.let { rename ->
+                androidx.compose.material3.DropdownMenuItem(text = { Text(tr("Renomear", "Renombrar")) },
+                    onClick = { menuOpen = false; rename() })
+            }
+            onDelete?.let { delete ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(tr("Eliminar cartafol", "Eliminar carpeta"), color = MaterialTheme.colorScheme.error) },
+                    onClick = { menuOpen = false; delete() })
+            }
         }
-        Text(name, maxLines = 2, overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 

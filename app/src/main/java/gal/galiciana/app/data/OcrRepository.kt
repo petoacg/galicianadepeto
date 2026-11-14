@@ -1,5 +1,6 @@
 package gal.galiciana.app.data
 
+import gal.galiciana.app.i18n.tr
 import gal.galiciana.app.domain.OcrHit
 import gal.galiciana.app.domain.OcrWorkGroup
 import gal.galiciana.app.domain.PageContent
@@ -57,7 +58,7 @@ class OcrRepository {
                 response.body?.string().orEmpty().takeUnless {
                     it.trimStart().startsWith("<!DOCTYPE html", true) ||
                         it.trimStart().startsWith("<html", true)
-                } ?: error("Galiciana no ha devuelto texto OCR")
+                } ?: error(tr("Galiciana non devolveu texto OCR", "Galiciana no ha devuelto texto OCR"))
             }
 
             PageContent(
@@ -365,7 +366,7 @@ class OcrRepository {
                 Http.client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) error("Búsqueda: HTTP ${response.code}")
                     response.body?.string()?.takeIf { it.isNotBlank() }
-                        ?: error("Respuesta vacía de Galiciana")
+                        ?: error(tr("Resposta baleira de Galiciana", "Respuesta vacía de Galiciana"))
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -402,7 +403,7 @@ class OcrRepository {
         val html = Http.client.newCall(Request.Builder().url(url).get().build())
             .execute().use { response ->
                 if (!response.isSuccessful) error("Búsqueda: HTTP ${response.code}")
-                response.body?.string() ?: error("Respuesta vacía de Galiciana")
+                response.body?.string() ?: error(tr("Resposta baleira de Galiciana", "Respuesta vacía de Galiciana"))
             }
         SearchResult(parseSearchResponse(html), nextResultsUrl(html, url)?.takeUnless { it == url },
             resultSortUrls(html, url), resultTotal(html))
@@ -437,7 +438,7 @@ class OcrRepository {
         return link?.absUrl("href")?.takeIf { it.startsWith(GalicianaUrls.BASE) }
     }
 
-    private fun resultSortUrls(html: String, base: String): Map<String, String> {
+    internal fun resultSortUrls(html: String, base: String): Map<String, String> {
         val doc = Jsoup.parse(html, base)
         // The sorting controls have appeared under several containers in Galiciana.
         // A pagination URL carries the same query parameters when controls are absent.
@@ -451,7 +452,7 @@ class OcrRepository {
             ?: return emptyMap()
         if (source.host != "biblioteca.galiciana.gal") return emptyMap()
         val fields = mapOf("Titulo" to "tituloorden", "Autor" to "autororden",
-            "Fecha" to "fechapublicacionorden", "Relevancia" to "score")
+            tr("Data", "Fecha") to "fechapublicacionorden", "Relevancia" to "score")
         return buildMap {
             fields.forEach { (key, field) ->
                 listOf("N", "S").forEach { direction ->
@@ -475,11 +476,11 @@ class OcrRepository {
             .map { (_, pages) ->
                 val first = pages.first()
                 fun weak(t: String) =
-                    t.isBlank() || t.equals("Documento", true) || t.startsWith("Pág") || t.startsWith("Página")
+                    t.isBlank() || t.equals("Documento", true) || t.startsWith("Pág") || t.startsWith("Páx")
                 val parent = pages.mapNotNull { it.parentTitle?.trim() }.firstOrNull { it.isNotBlank() && !weak(it) }
                 val title = pages.map { it.title }.firstOrNull { !weak(it) && it.length > 8 }
                     ?: parent
-                    ?: first.title.ifBlank { "Título desconocido" }
+                    ?: first.title.ifBlank { tr("Título descoñecido", "Título desconocido") }
                 OcrWorkGroup(
                     title = title,
                     parentTitle = parent,
@@ -498,7 +499,7 @@ class OcrRepository {
             RegexOption.IGNORE_CASE,
         ).containsMatchIn(doc.body().text())
         check(emptyMessage || doc.select(".navegacion_resultados, .nav_registros").isNotEmpty()) {
-            "Galiciana no ha devuelto una página de resultados reconocible. Vuelve a intentarlo."
+            tr("Galiciana non devolveu os resultados. Téntao de novo.", "Galiciana no ha devuelto los resultados. Vuelve a intentarlo.")
         }
         return emptyList()
     }
@@ -544,7 +545,7 @@ class OcrRepository {
         fun pickTitle(raw: String?): String? {
             val t = raw?.let(::decodeEntities)?.trim() ?: return null
             if (t.isBlank()) return null
-            if (t.startsWith("Pág", true) || t.startsWith("Página", true)) return null
+            if (t.startsWith("Pág", true) || t.startsWith("Páx", true)) return null
             if (t.equals("Documento", true) || t.length < 6) return null
             return t
         }

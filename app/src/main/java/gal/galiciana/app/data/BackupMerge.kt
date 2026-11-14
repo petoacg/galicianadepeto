@@ -1,4 +1,5 @@
 package gal.galiciana.app.data
+import gal.galiciana.app.i18n.tr
 
 /** Deterministic, pure merge: no preferences or files are written during preview. */
 internal object BackupMerge {
@@ -10,13 +11,13 @@ internal object BackupMerge {
         return BackupJson.parse(value.values.single())
     }
     private fun objectValue(value: BackupPreference?): Map<String, Any?> {
-        val map = json(value) as? Map<*, *> ?: error("Objeto inválido")
+        val map = json(value) as? Map<*, *> ?: error(tr("Obxecto non válido", "Objeto inválido"))
         return map.entries.associate { require(it.key is String); it.key as String to it.value }
     }
     private fun noteMap(value: BackupPreference?): Map<String, Any?> = objectValue(value).also {
-        require(it.values.all { note -> note is String }) { "Mapa de notas inválido" }
+        require(it.values.all { note -> note is String }) { tr("Mapa de notas non válido", "Mapa de notas inválido") }
     }
-    private fun arrayValue(value: BackupPreference?): List<Any?> = json(value) as? List<*> ?: error("Lista inválida")
+    private fun arrayValue(value: BackupPreference?): List<Any?> = json(value) as? List<*> ?: error(tr("Lista non válida", "Lista inválida"))
     private fun stringify(value: Any?): String = if (value is String) value else BackupJson.encode(value)
     private fun conflictMap(conflict: BackupConflict): Map<String, Any> = mapOf("id" to conflict.id,
         "key" to conflict.key, "kind" to conflict.kind, "localValue" to conflict.localValue,
@@ -78,14 +79,14 @@ internal object BackupMerge {
         val mergedNotes = notesOf(current).toMutableMap()
         notesOf(incoming).forEach { (key, value) ->
             val old = mergedNotes[key]
-            mergedNotes[key] = if (old == null) value else choose(key, "Nota de referencia", old, value) as String
+            mergedNotes[key] = if (old == null) value else choose(key, ConflictKind.NOTE, old, value) as String
         }
         fun recordKey(item: Map<*, *>, favorites: Boolean): String = if (favorites && item["path"] is String)
             "${item["path"]}|${item["pos"] ?: 1}" else item["id"] as? String ?: BackupJson.encode(item)
         fun mergeRecords(local: List<Any?>, other: List<Any?>, favorites: Boolean): List<Any?> {
             val rows = linkedMapOf<String, Map<String, Any?>>()
             fun record(raw: Any?): Map<String, Any?> {
-                val map = raw as? Map<*, *> ?: error("Registro inválido")
+                val map = raw as? Map<*, *> ?: error(tr("Rexistro non válido", "Registro inválido"))
                 return map.entries.associate { require(it.key is String); it.key as String to it.value }
             }
             local.forEach { raw -> val item = record(raw); rows[recordKey(item, favorites)] = item }
@@ -104,13 +105,13 @@ internal object BackupMerge {
                         val oldValue = localContext[field]
                         value != null && value != "" && oldValue != null && oldValue != "" && oldValue != value
                     }
-                    if (conflictingContext && choose(key, "Contexto de página", localContext, incomingContext) == incomingContext) {
+                    if (conflictingContext && choose(key, ConflictKind.CONTEXT, localContext, incomingContext) == incomingContext) {
                         incomingContext.forEach { (field, value) -> if (value != null && value != "") combined[field] = value }
                     }
                     rows[key] = combined
                 } else if (previous != item) {
                     @Suppress("UNCHECKED_CAST")
-                    rows[key] = choose(key, "Búsqueda", previous, item) as Map<String, Any?>
+                    rows[key] = choose(key, ConflictKind.SEARCH, previous, item) as Map<String, Any?>
                 }
             }
             return rows.map { (key, row) -> if (favorites && mergedNotes.containsKey(key)) row + ("note" to mergedNotes.getValue(key)) else row }
@@ -118,7 +119,7 @@ internal object BackupMerge {
         fun folders(value: Any?): List<String> = when (value) {
             is List<*> -> value.map { require(it is String); it }
             is String -> if (value.trim().startsWith("[")) folders(BackupJson.parse(value)) else listOf(value).filter(String::isNotBlank)
-            else -> error("Carpetas inválidas")
+            else -> error(tr("Cartafoles non válidos", "Carpetas inválidas"))
         }
         incoming.forEach { (key, value) ->
             if (key == CONFLICTS || key == "notes_json") return@forEach
@@ -144,7 +145,7 @@ internal object BackupMerge {
                         objectValue(value).forEach { (page, raw) ->
                             val previous = map[page]
                             if (previous == null) map[page] = raw
-                            else if (previous != raw) map[page] = choose(page, "Página archivada", previous, raw)
+                            else if (previous != raw) map[page] = choose(page, ConflictKind.PAGE_FOLDERS, previous, raw)
                         }
                         text(BackupJson.encode(map))
                     }
@@ -153,7 +154,7 @@ internal object BackupMerge {
             }.getOrNull()
             if (combined != null) result[key] = combined
             else {
-                val selected = choose(key, "Preferencia", mapOf("type" to old.type.name, "values" to old.values),
+                val selected = choose(key, ConflictKind.PREFERENCE, mapOf("type" to old.type.name, "values" to old.values),
                     mapOf("type" to value.type.name, "values" to value.values)) as Map<*, *>
                 result[key] = BackupPreference(BackupPreferenceType.valueOf(selected["type"] as String),
                     (selected["values"] as List<*>).map { it as String })
@@ -175,10 +176,24 @@ internal object BackupMerge {
         // A malformed note map is still preserved explicitly instead of disappearing in a merge.
         listOf(current, incoming).forEachIndexed { i, source ->
             source["notes_json"]?.let { value -> if (runCatching { noteMap(value) }.isFailure) {
-                choose("notes_json:$i", "Archivo de notas no interpretable", "", value.values.joinToString("\n"))
+                choose("notes_json:$i", ConflictKind.NOTES_FILE, "", value.values.joinToString("\n"))
             } }
         }
         if (pending.isNotEmpty()) result[CONFLICTS] = text(BackupJson.encode(pending.values.map(::conflictMap)))
         return Result(result.toMap(), detected.values.filter { it.id in pending })
     }
 }
+
+/**
+ * Conflict kinds are part of the conflict id, so they stay fixed Spanish values whatever
+ * the interface language; presentBackupConflict translates them for display.
+ */
+object ConflictKind {
+    const val NOTE = "Nota de referencia"
+    const val CONTEXT = "Contexto de página"
+    const val SEARCH = "Búsqueda"
+    const val PAGE_FOLDERS = "Página archivada"
+    const val PREFERENCE = "Preferencia"
+    const val NOTES_FILE = "Archivo de notas no interpretable"
+}
+

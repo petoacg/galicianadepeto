@@ -1,5 +1,6 @@
 package gal.galiciana.app.data
 
+import gal.galiciana.app.i18n.tr
 import android.content.Context
 import android.content.SharedPreferences
 import kotlinx.coroutines.Dispatchers
@@ -41,7 +42,7 @@ class ArchiveBackup(private val context: Context) {
 
     suspend fun export(output: OutputStream): BackupReport = withContext(Dispatchers.IO) {
         synchronized(lock) {
-            check(recoverPendingImport(context)) { "Hay una recuperación pendiente; no se puede crear otra copia todavía." }
+            check(recoverPendingImport(context)) { tr("Hai unha recuperación pendente; aínda non se pode crear outra copia.", "Hay una recuperación pendiente; no se puede crear otra copia todavía.") }
             val payload = BackupPayload(snapshot(prefs), System.currentTimeMillis())
             BackupFormat.write(output, payload)
             BackupReport(BackupMerge.counts(payload.preferences), payload.createdAt)
@@ -50,7 +51,7 @@ class ArchiveBackup(private val context: Context) {
     suspend fun preview(input: InputStream): BackupPreview = withContext(Dispatchers.IO) {
         val payload = BackupFormat.read(input)
         synchronized(lock) {
-            check(recoverPendingImport(context)) { "No se pudo recuperar una importación anterior." }
+            check(recoverPendingImport(context)) { tr("Non se puido recuperar unha importación anterior.", "No se pudo recuperar una importación anterior.") }
             val current = snapshot(prefs)
             val merge = BackupMerge.merge(current, payload.preferences, payload.createdAt)
             BackupPreview(payload, BackupFormat.fingerprint(current), BackupMerge.counts(payload.preferences),
@@ -60,16 +61,16 @@ class ArchiveBackup(private val context: Context) {
     suspend fun importBackup(preview: BackupPreview, options: ImportOptions = ImportOptions()): ImportReport =
         withContext(Dispatchers.IO + NonCancellable) {
             synchronized(lock) {
-                check(recoverPendingImport(context)) { "No se pudo recuperar una importación anterior." }
+                check(recoverPendingImport(context)) { tr("Non se puido recuperar unha importación anterior.", "No se pudo recuperar una importación anterior.") }
                 val current = snapshot(prefs)
                 check(BackupFormat.fingerprint(current) == preview.prefsFingerprint) {
-                    "Los datos cambiaron desde la vista previa. Reabre la copia antes de importarla."
+                    tr("Os datos cambiaron desde a vista previa. Reabre a copia antes de importala.", "Los datos cambiaron desde la vista previa. Reabre la copia antes de importarla.")
                 }
-                require(options.mode != ImportMode.REPLACE || options.confirmReplace) { "Reemplazar requiere confirmación explícita." }
+                require(options.mode != ImportMode.REPLACE || options.confirmReplace) { tr("Substituír require confirmación explícita.", "Reemplazar requiere confirmación explícita.") }
                 val merged = if (options.mode == ImportMode.REPLACE) BackupMerge.Result(preview.payload.preferences, emptyList())
                     else BackupMerge.merge(current, preview.payload.preferences, preview.createdAt, options.resolutions)
                 val journal = journal(context)
-                check(!journal.exists()) { "Ya existe una recuperación pendiente." }
+                check(!journal.exists()) { tr("Xa existe unha recuperación pendente.", "Ya existe una recuperación pendiente.") }
                 val temporary = File(journal.parentFile, "pending.tmp")
                 val committed = File(journal.parentFile, "committed")
                 val committedTemporary = File(journal.parentFile, "committed.tmp")
@@ -82,16 +83,16 @@ class ArchiveBackup(private val context: Context) {
                         }
                         BackupFormat.write(durable, BackupPayload(current, System.currentTimeMillis()))
                     }
-                    check(temporary.renameTo(journal)) { "No se pudo preparar la recuperación de seguridad." }
+                    check(temporary.renameTo(journal)) { tr("Non se puido preparar a recuperación de seguridade.", "No se pudo preparar la recuperación de seguridad.") }
                     if (!replace(prefs, merged.preferences)) {
                         val restored = replace(prefs, current)
                         if (restored) journal.delete()
-                        throw BackupImportException(if (restored) "No se pudo importar. Se han restaurado los datos anteriores."
-                            else "No se pudo importar ni completar la recuperación. Conservamos una copia interna para reintentar al abrir la app.", restored)
+                        throw BackupImportException(if (restored) tr("Non se puido importar. Restauráronse os datos anteriores.", "No se pudo importar. Se han restaurado los datos anteriores.")
+                            else tr("Non se puido importar nin completar a recuperación. Conservamos unha copia interna para tentalo de novo ao abrir a app.", "No se pudo importar ni completar la recuperación. Conservamos una copia interna para reintentar al abrir la app."), restored)
                     }
                     // Publish the marker atomically; a partial marker must never certify a commit.
                     FileOutputStream(committedTemporary).use { it.write(byteArrayOf(1)); it.fd.sync() }
-                    check(committedTemporary.renameTo(committed)) { "No se pudo confirmar el cierre de la importación." }
+                    check(committedTemporary.renameTo(committed)) { tr("Non se puido confirmar o peche da importación.", "No se pudo confirmar el cierre de la importación.") }
                     // If cleanup fails, retain the marker so startup preserves this successful import.
                     if (journal.delete()) committed.delete()
                     ImportReport(BackupMerge.counts(merged.preferences), merged.conflicts, options.mode == ImportMode.REPLACE)
@@ -100,8 +101,8 @@ class ArchiveBackup(private val context: Context) {
                     committed.delete()
                     val restored = if (journal.exists()) replace(prefs, current) else true
                     if (restored) journal.delete()
-                    throw BackupImportException(if (restored) "No se pudo completar la importación; se han conservado los datos anteriores."
-                        else "La recuperación sigue pendiente. Conservamos una copia interna de tus datos.", restored, e)
+                    throw BackupImportException(if (restored) tr("Non se puido completar a importación; conserváronse os datos anteriores.", "No se pudo completar la importación; se han conservado los datos anteriores.")
+                        else tr("A recuperación segue pendente. Conservamos unha copia interna dos teus datos.", "La recuperación sigue pendiente. Conservamos una copia interna de tus datos."), restored, e)
                 } finally { temporary.delete(); committedTemporary.delete() }
             }
         }

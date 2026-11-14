@@ -1,5 +1,6 @@
 package gal.galiciana.app.ui.home
 
+import gal.galiciana.app.i18n.tr
 import gal.galiciana.app.data.GalicianaUrls
 import gal.galiciana.app.data.Http
 import kotlinx.coroutines.Dispatchers
@@ -20,7 +21,7 @@ internal class HomeNewsRepository {
     suspend fun latest(): List<HomeNews> = withContext(Dispatchers.IO) {
         val html = fetch(NEWS_URL)
         val items = parse(html)
-        if (items.isEmpty()) error("Galiciana no ha devuelto noticias")
+        if (items.isEmpty()) error(tr("Galiciana non devolveu noticias", "Galiciana no ha devuelto noticias"))
         items.take(3).map { item ->
             if (item.description.isNotBlank()) item
             else item.copy(description = runCatching { articleDescription(item.url) }.getOrDefault(""))
@@ -63,6 +64,6 @@ internal class HomeNewsRepository {
     private fun fetch(url: String): String = client.newCall(Request.Builder().url(url).build())
         .execute().use { response ->
             if (!response.isSuccessful) error("Galiciana: HTTP ${response.code}")
-            response.body?.string() ?: error("Respuesta vacía de Galiciana")
+            response.body?.string() ?: error(tr("Resposta baleira de Galiciana", "Respuesta vacía de Galiciana"))
         }
 }

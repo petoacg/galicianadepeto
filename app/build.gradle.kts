@@ -12,12 +12,17 @@ android {
         applicationId = "gal.galiciana2.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.4.3"
+        versionCode = 7
+        versionName = "0.4.4"
         testInstrumentationRunner = "gal.galiciana.app.OcrDeviceVerification"
     }
 
     buildTypes {
+        debug {
+            // Test builds install beside the published app and never touch its data.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-prueba"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(

@@ -1,5 +1,6 @@
 package gal.galiciana.app.data
 
+import gal.galiciana.app.i18n.tr
 import gal.galiciana.app.domain.MetsDocument
 import gal.galiciana.app.domain.MetsPage
 import kotlinx.coroutines.Dispatchers
@@ -47,13 +48,13 @@ class MetsRepository {
         val ordered = structured.sortedWith(compareBy<Triple<Int?, String, Boolean>> { it.first ?: Int.MAX_VALUE })
             .distinctBy { it.second }
         val pages = if (ordered.isNotEmpty()) ordered.mapIndexed { index, (_, id, ocr) ->
-            MetsPage(index + 1, id, "Pág. ${index + 1}", ocr)
+            MetsPage(index + 1, id, tr("Páx. ${index + 1}", "Pág. ${index + 1}"), ocr)
         } else {
             files.values.mapNotNull(::imageId).distinct().mapIndexed { index, id ->
-                MetsPage(index + 1, id, "Pág. ${index + 1}", false)
+                MetsPage(index + 1, id, tr("Páx. ${index + 1}", "Pág. ${index + 1}"), false)
             }
         }
-        if (pages.isEmpty()) error("El METS no contiene páginas de imagen reconocibles")
+        if (pages.isEmpty()) error(tr("Esta publicación non ten páxinas dixitalizadas dispoñibles", "Esta publicación no tiene páginas digitalizadas disponibles"))
         return MetsDocument(path, title, pages)
     }
 }

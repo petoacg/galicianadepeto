@@ -1,5 +1,6 @@
 package gal.galiciana.app.ui.search
 
+import gal.galiciana.app.i18n.tr
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -144,10 +145,10 @@ class SearchViewModel(
             if (!advanced) return null
             if ((yearFrom.isNotBlank() && sanitizeYear(yearFrom).isBlank()) ||
                 (yearTo.isNotBlank() && sanitizeYear(yearTo).isBlank()))
-                return "Introduce años de cuatro cifras entre 1000 y 2100."
+                return tr("Introduce anos de catro cifras entre 1000 e 2100.", "Introduce años de cuatro cifras entre 1000 y 2100.")
             if (yearFrom.isNotBlank() && yearTo.isNotBlank() &&
                 yearFrom.trim().toInt() > yearTo.trim().toInt())
-                return "El año inicial no puede ser posterior al final."
+                return tr("O ano inicial non pode ser posterior ao final.", "El año inicial no puede ser posterior al final.")
             return null
         }
 
@@ -157,6 +158,7 @@ class SearchViewModel(
                 yearFrom.isNotBlank() || yearTo.isNotBlank())))
 
     fun search() {
+        recoveryFailed = false
         if (!canSearch || loading) return
         val requestedQuery = normalizeSearchInput(query)
         sortJob?.cancel()
@@ -240,7 +242,7 @@ class SearchViewModel(
                 groups = withContext(Dispatchers.Default) { rankedGroups(shown) }
                 completedSearchGeneration = searchGeneration
                 if (shown.isEmpty()) error = if (pendingUrls.isNotEmpty())
-                    "Sin coincidencias verificadas en este lote; carga más resultados."
+                    tr("Sen coincidencias verificadas neste lote; carga máis resultados.", "Sin coincidencias verificadas en este lote; carga más resultados.")
                 else "Sin resultados con esos criterios"
                 if (literalPhrase != null) {
                     val generation = searchGeneration
@@ -281,7 +283,7 @@ class SearchViewModel(
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                error = "No se pudo completar la búsqueda: ${e.message ?: "error de conexión"}"
+                error = tr("Non se puido completar a busca. ${gal.galiciana.app.ui.friendlyError(e)}", "No se pudo completar la búsqueda. ${gal.galiciana.app.ui.friendlyError(e)}")
                 incomplete = true
             }
             loading = false
@@ -312,7 +314,7 @@ class SearchViewModel(
                 incomplete = pendingUrls.isNotEmpty()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                error = "No se pudieron cargar más resultados: ${e.message ?: "error de conexión"}"
+                error = tr("Non se puideron cargar máis resultados. ${gal.galiciana.app.ui.friendlyError(e)}", "No se pudieron cargar más resultados. ${gal.galiciana.app.ui.friendlyError(e)}")
             } finally {
                 loading = false
             }
@@ -346,7 +348,7 @@ class SearchViewModel(
         if (url == null) {
             sortBy = previousSort
             sortAsc = previousAsc
-            error = "Galiciana no ofrece este orden para la búsqueda."
+            error = tr("Galiciana non ofrece esta orde para a busca.", "Galiciana no ofrece este orden para la búsqueda.")
             return
         }
         sortJob?.cancel()
@@ -373,7 +375,7 @@ class SearchViewModel(
                 if (e is CancellationException) throw e
                 sortBy = previousSort
                 sortAsc = previousAsc
-                error = "No se pudo cambiar el orden. Se conserva el anterior. Comprueba la conexión y vuelve a intentarlo."
+                error = tr("Non se puido cambiar a orde. Consérvase a anterior. Comproba a conexión e téntao de novo.", "No se pudo cambiar el orden. Se conserva el anterior. Comprueba la conexión y vuelve a intentarlo.")
             } finally {
                 loading = false
             }
@@ -381,8 +383,12 @@ class SearchViewModel(
     }
 
     /** An explicit, bounded second search. It never replaces precise results. */
+    /** The last error came from the broader search, so retrying must repeat that. */
+    var recoveryFailed by mutableStateOf(false)
+
     fun loadRecovery() {
         if (loading || recoveryLoading || submittedQuery.isBlank()) return
+        recoveryFailed = false
         val generation = searchGeneration
         val filters = submittedFilters
         val words = queryTokens(submittedQuery)
@@ -410,7 +416,8 @@ class SearchViewModel(
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                if (generation == searchGeneration) error = "No se pudo cargar la repesca: ${e.message ?: "error de conexión"}"
+                if (generation == searchGeneration) recoveryFailed = true
+                if (generation == searchGeneration) error = tr("Non se puido completar a busca ampliada. ${gal.galiciana.app.ui.friendlyError(e)}", "No se pudo completar la búsqueda ampliada. ${gal.galiciana.app.ui.friendlyError(e)}")
             } finally {
                 if (generation == searchGeneration) recoveryLoading = false
             }

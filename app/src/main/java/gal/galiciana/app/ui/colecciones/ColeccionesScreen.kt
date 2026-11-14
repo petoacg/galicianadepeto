@@ -1,5 +1,23 @@
 package gal.galiciana.app.ui.colecciones
 
+import androidx.compose.foundation.layout.size
+import gal.galiciana.app.ui.cleanSourceTitle
+import gal.galiciana.app.ui.localizeSourcePhrase
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.HistoryEdu
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Campaign
+import androidx.compose.material.icons.outlined.Mail
+import androidx.compose.material.icons.outlined.Receipt
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.Folder
+import gal.galiciana.app.i18n.tr
+import gal.galiciana.app.ui.liveStatus
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -70,7 +88,6 @@ import gal.galiciana.app.data.Http
 import gal.galiciana.app.data.HemerotecaRepository
 import gal.galiciana.app.data.Numero
 import gal.galiciana.app.ui.SectionBar
-import gal.galiciana.app.ui.SectionColecciones
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -91,23 +108,24 @@ internal data class Seccion(
     val children: List<Seccion> = emptyList(),
 )
 
-private val Secciones = listOf(
-    Seccion("Libros y monografías", "13124554", "MONOGRAFIA"),
-    Seccion("Mapas y planos", "14098722", "CARTOGRAF"),
+// A getter, so the labels follow a language change without restarting the app.
+private val Secciones get() = listOf(
+    Seccion(tr("Libros e monografías", "Libros y monografías"), "13124554", "MONOGRAFIA"),
+    Seccion(tr("Mapas e planos", "Mapas y planos"), "14098722", "CARTOGRAF"),
     Seccion("Manuscritos", "13948376", "MANUSCRITO"),
-    Seccion("Imágenes y documentos gráficos", "13787413", "ILUSFOT", children = listOf(
-        Seccion("Carteles", "13124554", "CARTEIS", "ILUSFOT_CARTEIS"),
-        Seccion("Tarjetas postales", "13787413", "POSTAIS", "ILUSFOT_POSTAIS"),
-        Seccion("Impresos efímeros", "14185891", "EPHEMERA", "ILUSFOT_EPHEMERA"),
-        Seccion("Imágenes del portal conjunto", "14153014", "FOTOS", "ILUSFOT_FOTOS"),
+    Seccion(tr("Imaxes e documentos gráficos", "Imágenes y documentos gráficos"), "13787413", "ILUSFOT", children = listOf(
+        Seccion(tr("Carteis", "Carteles"), "13124554", "CARTEIS", "ILUSFOT_CARTEIS"),
+        Seccion(tr("Tarxetas postais", "Tarjetas postales"), "13787413", "POSTAIS", "ILUSFOT_POSTAIS"),
+        Seccion(tr("Impresos efémeros", "Impresos efímeros"), "14185891", "EPHEMERA", "ILUSFOT_EPHEMERA"),
+        Seccion(tr("Imaxes do portal conxunto", "Imágenes del portal conjunto"), "14153014", "FOTOS", "ILUSFOT_FOTOS"),
     )),
-    Seccion("Archivos personales", "14185891", "ARQUIVOS", children = listOf(
+    Seccion(tr("Arquivos persoais", "Archivos personales"), "14185891", "ARQUIVOS", children = listOf(
         Seccion("Camilo Díaz Baliño", "14185891", "ARQCDB", "ARQUIVOS_ARQCDB"),
         Seccion("Carlos Casares", "14185891", "ARQCCM", "ARQUIVOS_ARQCCM"),
     )),
-    Seccion("Grabaciones sonoras", "13872855", "SONS"),
-    Seccion("Vídeos y audiovisuales", "14098722", "AUDIOVISUA"),
-    Seccion("Partituras y música impresa", "13948376", "MUSICA"),
+    Seccion(tr("Gravacións sonoras", "Grabaciones sonoras"), "13872855", "SONS"),
+    Seccion(tr("Vídeos e audiovisuais", "Vídeos y audiovisuales"), "14098722", "AUDIOVISUA"),
+    Seccion(tr("Partituras e música impresa", "Partituras y música impresa"), "13948376", "MUSICA"),
 )
 
 internal data class CollectionWork(
@@ -216,7 +234,7 @@ internal class CollectionRepository {
     private fun fetch(request: Request, url: String): CollectionPage {
         val html = Http.client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("Galiciana: HTTP ${response.code}")
-            response.body?.string() ?: error("Respuesta vacía de Galiciana")
+            response.body?.string() ?: error(tr("Resposta baleira de Galiciana", "Respuesta vacía de Galiciana"))
         }
         return parse(html, url)
     }
@@ -224,7 +242,7 @@ internal class CollectionRepository {
     fun parse(html: String, url: String): CollectionPage {
         val doc = Jsoup.parse(html, url)
         check(!(doc.body().hasClass("block") && doc.select(".registro, .nav_registro, a[href*=registro.do], .ficha").isEmpty())) {
-            "Galiciana no ha devuelto el catálogo. Vuelve a intentarlo."
+            tr("Galiciana non devolveu o catálogo. Téntao de novo.", "Galiciana no ha devuelto el catálogo. Vuelve a intentarlo.")
         }
         if (url.startsWith(photoBase)) {
             val works = doc.select(".nav_registros .nav_registro").mapNotNull { card ->
@@ -273,11 +291,11 @@ internal class CollectionRepository {
             (url.contains("registro.do?") || url.contains("forma=ficha"))))
         val html = Http.client.newCall(Request.Builder().url(url).build()).execute().use { response ->
             if (!response.isSuccessful) error("Galiciana: HTTP ${response.code}")
-            response.body?.string() ?: error("Respuesta vacía de Galiciana")
+            response.body?.string() ?: error(tr("Resposta baleira de Galiciana", "Respuesta vacía de Galiciana"))
         }
         val doc = Jsoup.parse(html, url)
         check(!(doc.body().hasClass("block") && doc.select(".registro, .nav_registro, a[href*=registro.do], .ficha").isEmpty())) {
-            "Galiciana no ha devuelto el catálogo. Vuelve a intentarlo."
+            tr("Galiciana non devolveu o catálogo. Téntao de novo.", "Galiciana no ha devuelto el catálogo. Vuelve a intentarlo.")
         }
         if (isPhoto) {
             val image = Regex("https://(?:arquivo\\.galiciana\\.gal/arpadweb|biblioteca\\.galiciana\\.gal)/[^\\s<>\"]+/catalogo_imagenes/imagen_id\\.do\\?idImagen=\\d+")
@@ -404,7 +422,7 @@ internal class ColeccionesViewModel : ViewModel() {
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                error = "No se pudo cargar la ficha. Comprueba la conexión e inténtalo de nuevo."
+                error = tr("Non se puido cargar a ficha. Comproba a conexión e téntao de novo.", "No se pudo cargar la ficha. Comprueba la conexión e inténtalo de nuevo.")
             } finally { if (generation == request) loading = false }
         }
     }
@@ -422,7 +440,7 @@ internal class ColeccionesViewModel : ViewModel() {
             try { issues = issuesRepo.loadNumeros(id, value) }
             catch (e: Exception) {
                 if (e is CancellationException) throw e
-                error = "No se pudieron cargar los números de este año. Puedes volver a intentarlo."
+                error = tr("Non se puideron cargar os números deste ano. Podes tentalo de novo.", "No se pudieron cargar los números de este año. Puedes volver a intentarlo.")
             } finally { if (generation == request) loading = false }
         }
     }
@@ -465,7 +483,7 @@ internal class ColeccionesViewModel : ViewModel() {
                 nextUrl = page.nextUrl
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                error = "No se pudieron cargar las obras. Comprueba la conexión e inténtalo de nuevo."
+                error = tr("Non se puideron cargar as obras. Comproba a conexión e téntao de novo.", "No se pudieron cargar las obras. Comprueba la conexión e inténtalo de nuevo.")
             } finally {
                 if (generation == request) loading = false
             }
@@ -499,8 +517,8 @@ fun ColeccionesScreen(
             var scale by androidx.compose.runtime.remember(image) { mutableFloatStateOf(1f) }
             val gesture = rememberTransformableState { zoom, _, _ -> scale = (scale * zoom).coerceIn(1f, 6f) }
             Column {
-                TextButton(onClick = { expandedPhoto = null }) { Text("Cerrar imagen") }
-                AsyncImage(model = image, contentDescription = vm.openedWork?.title ?: "Imagen ampliada",
+                TextButton(onClick = { expandedPhoto = null }) { Text(tr("Pechar imaxe", "Cerrar imagen")) }
+                AsyncImage(model = image, contentDescription = vm.openedWork?.title ?: tr("Imaxe ampliada", "Imagen ampliada"),
                     modifier = Modifier.fillMaxWidth().heightIn(max = 580.dp)
                         .graphicsLayer(scaleX = scale, scaleY = scale).transformable(gesture),
                     contentScale = ContentScale.Fit)
@@ -514,10 +532,10 @@ fun ColeccionesScreen(
     }
     BackHandler(enabled = vm.vista != "raiz") { back() }
     val screenTitle = when (vm.vista) {
-        "ficha" -> vm.openedWork?.title.orEmpty().ifBlank { "Ficha del catálogo" }
+        "ficha" -> tr("Ficha do catálogo", "Ficha del catálogo")
         "hijos" -> vm.parent?.title.orEmpty()
         "resultados" -> vm.selected?.title.orEmpty()
-        else -> "Colecciones"
+        else -> tr("Coleccións", "Colecciones")
     }
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
@@ -525,19 +543,19 @@ fun ColeccionesScreen(
             if (vm.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             vm.error?.let { message ->
                 Text(message, color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp).liveStatus())
                 TextButton(onClick = { vm.retry() }, enabled = !vm.loading,
                     modifier = Modifier.padding(horizontal = 12.dp)) { Text("Reintentar") }
             }
             when (vm.vista) {
                 "ficha" -> LazyColumn(Modifier.weight(1f), state = detailList) {
                     item {
-                        Text(vm.openedWork?.title.orEmpty(), style = MaterialTheme.typography.titleLarge,
+                        Text(cleanSourceTitle(vm.openedWork?.title.orEmpty()), style = MaterialTheme.typography.titleLarge,
                             modifier = Modifier.padding(20.dp))
                         val copy = vm.detail?.path ?: vm.openedWork?.path
                         if (copy != null && vm.detail?.publicationId == null) {
                             Button(onClick = { openCopy(copy, vm.openedWork?.title.orEmpty()) },
-                                modifier = Modifier.padding(horizontal = 20.dp).heightIn(min = 48.dp)) { Text("Abrir copia digital") }
+                                modifier = Modifier.padding(horizontal = 20.dp).heightIn(min = 48.dp)) { Text(tr("Abrir copia dixital", "Abrir copia digital")) }
                         }
                         vm.detail?.let { CatalogueProvenance(it, Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) }
                         if (vm.years.isNotEmpty()) Box(Modifier.padding(horizontal = 12.dp)) {
@@ -545,13 +563,13 @@ fun ColeccionesScreen(
                         }
                     }
                     listItems(vm.issues, key = { it.path }) { issue ->
-                        Text(issue.label.ifBlank { "Abrir número digitalizado" },
+                        Text(issue.label.ifBlank { tr("Abrir número dixitalizado", "Abrir número digitalizado") },
                             modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) {
                                 openCopy(issue.path, listOf(vm.openedWork?.title.orEmpty(), issue.label).filter { it.isNotBlank() }.joinToString(" · "), vm.openedWork?.title)
                             }.padding(20.dp))
                     }
                     vm.detail?.imageUrl?.let { image -> item {
-                        Text("Imagen digitalizada · toca para ampliar", style = MaterialTheme.typography.bodySmall,
+                        Text(tr("Imaxe dixitalizada · toca para ampliar", "Imagen digitalizada · toca para ampliar"), style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
                         AsyncImage(model = image, contentDescription = vm.openedWork?.title,
                             modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(20.dp)
@@ -560,13 +578,13 @@ fun ColeccionesScreen(
                     vm.detail?.let { data -> item { CatalogueFields(data, Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) } }
                     if (!vm.loading && vm.error == null && vm.detail != null && vm.issues.isEmpty()) item {
                         val hasCopy = vm.detail?.path != null || vm.openedWork?.path != null || vm.detail?.imageUrl != null
-                        if (!hasCopy) Text(if (vm.detail?.publicationId != null) "No hay números digitalizados disponibles en este año."
-                            else "Esta ficha no tiene copia digital disponible.", modifier = Modifier.padding(20.dp))
+                        if (!hasCopy) Text(if (vm.detail?.publicationId != null) tr("Non hai números dixitalizados dispoñibles neste ano.", "No hay números digitalizados disponibles en este año.")
+                            else tr("Esta ficha non ten copia dixital dispoñible.", "Esta ficha no tiene copia digital disponible."), modifier = Modifier.padding(20.dp))
                     }
                 }
                 "hijos" -> LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 156.dp), state = childrenGrid,
-                    modifier = Modifier.weight(1f).padding(8.dp)) {
-                    vm.parent?.children?.let { children -> items(children) { section -> Tile(section.title, section.imageId) { vm.open(section) } } }
+                    modifier = Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 8.dp)) {
+                    vm.parent?.children?.let { children -> items(children) { section -> Tile(section.title, section.filterCode) { vm.open(section) } } }
                     item(span = { GridItemSpan(maxLineSpan) }) { vm.parent?.let { parent ->
                         TextButton(onClick = { vm.open(parent) }, modifier = Modifier.fillMaxWidth().padding(8.dp)) { Text("Consultar todo: ${parent.title}") }
                     } }
@@ -574,14 +592,14 @@ fun ColeccionesScreen(
                 "resultados" -> {
                     Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         gal.galiciana.app.ui.ClearableField(value = vm.q, onValueChange = { vm.q = it },
-                            placeholder = "Buscar en esta colección", modifier = Modifier.weight(1f), onSearch = { vm.search() })
-                        IconButton(onClick = { vm.search() }, enabled = !vm.loading) { Icon(Icons.Filled.Search, "Buscar en esta colección") }
+                            placeholder = tr("Buscar nesta colección", "Buscar en esta colección"), modifier = Modifier.weight(1f), onSearch = { vm.search() })
+                        IconButton(onClick = { vm.search() }, enabled = !vm.loading) { Icon(Icons.Filled.Search, tr("Buscar nesta colección", "Buscar en esta colección")) }
                     }
                     Text("${vm.works.size} obras cargadas" + if (vm.appliedQuery.isNotBlank()) " · ${vm.appliedQuery}" else "",
                         modifier = Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
-                    if (vm.selected?.code == "FOTOS") Text("Este conjunto reúne fotografías, ilustraciones y carteles de los portales de Galiciana.",
+                    if (vm.selected?.code == "FOTOS") Text(tr("Este conxunto reúne fotografías, ilustracións e carteis dos portais de Galiciana.", "Este conjunto reúne fotografías, ilustraciones y carteles de los portales de Galiciana."),
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
-                    if (!vm.loading && vm.error == null && vm.works.isEmpty()) Text("No hay obras con estos criterios. Prueba otra palabra o borra la búsqueda.",
+                    if (!vm.loading && vm.error == null && vm.works.isEmpty()) Text(tr("Non hai obras con estes criterios. Proba outra palabra ou borra a busca.", "No hay obras con estos criterios. Prueba otra palabra o borra la búsqueda."),
                         modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 156.dp), state = resultsGrid,
                         modifier = Modifier.weight(1f).padding(8.dp)) {
@@ -593,37 +611,43 @@ fun ColeccionesScreen(
                                     contentAlignment = Alignment.Center) {
                                     if (work.thumbnailUrl != null) AsyncImage(model = work.thumbnailUrl, contentDescription = null,
                                         modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                                    else Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Icon(Icons.Outlined.Image, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text("Sin miniatura", style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    // No cover from Galiciana: show what kind of item it is and when,
+                                    // in the same space a cover would take, instead of an absence.
+                                    else Column(horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
+                                        Icon(sectionIcon(vm.selected?.filterCode.orEmpty()), null,
+                                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                                        work.date?.let { Regex("""\d{4}""").find(it)?.value }?.let { year ->
+                                            Text(year, style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
                                     }
                                 }
-                                Text(work.title, style = MaterialTheme.typography.titleSmall, minLines = 3, maxLines = 3,
+                                Text(cleanSourceTitle(work.title), style = MaterialTheme.typography.titleSmall, minLines = 3, maxLines = 3,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
                                 listOfNotNull(work.creator, work.date).takeIf { it.isNotEmpty() }?.let { lines ->
                                     Text(lines.joinToString(" · "), style = MaterialTheme.typography.bodySmall,
                                         maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Text(if (work.path != null || work.recordUrl != null) "Ver ficha del catálogo" else "Sin ficha disponible",
+                                Text(if (work.path != null || work.recordUrl != null) tr("Ver ficha do catálogo", "Ver ficha del catálogo") else tr("Sen ficha dispoñible", "Sin ficha disponible"),
                                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
                             }
                         }
                         if (vm.nextUrl != null) item(span = { GridItemSpan(maxLineSpan) }) {
                             TextButton(onClick = { vm.more() }, enabled = !vm.loading,
-                                modifier = Modifier.fillMaxWidth().padding(12.dp)) { Text("Cargar más obras") }
+                                modifier = Modifier.fillMaxWidth().padding(12.dp)) { Text(tr("Cargar máis obras", "Cargar más obras")) }
                         }
                     }
                 }
                 else -> LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 156.dp), state = rootGrid,
-                    modifier = Modifier.weight(1f).padding(8.dp)) {
+                    modifier = Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 8.dp)) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        Text("Fondos por tipo de documento", style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(12.dp))
+                        Text(tr("Fondos por tipo de documento", "Fondos por tipo de documento"), style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 12.dp))
                     }
-                    items(Secciones) { section -> Tile(section.title, section.imageId) {
+                    items(Secciones) { section -> Tile(section.title, section.filterCode) {
                         if (section.children.isEmpty()) vm.open(section) else { vm.parent = section; vm.vista = "hijos" }
                     } }
                 }
@@ -633,14 +657,42 @@ fun ColeccionesScreen(
 }
 
 @Composable
-private fun Tile(title: String, imageId: String, onClick: () -> Unit) {
-    Column(Modifier.padding(8.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp))
-        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp)).clickable(onClick = onClick)) {
-        AsyncImage(model = GalicianaUrls.thumb(imageId), contentDescription = null,
-            modifier = Modifier.fillMaxWidth().height(118.dp), contentScale = ContentScale.Crop)
-        Text(title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(10.dp))
+private fun Tile(title: String, code: String, onClick: () -> Unit) {
+    // Fund types are categories, not works: one drawn symbol each and equal tiles,
+    // instead of sample covers that repeated across sections.
+    // Symbol and name side by side: the name is what people read, so it gets the room.
+    Row(Modifier.padding(6.dp).fillMaxWidth().height(88.dp).clip(RoundedCornerShape(12.dp))
+        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+        .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+        .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(40.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center) {
+            Icon(sectionIcon(code), null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+        }
+        Text(title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.labelLarge, maxLines = 3,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(start = 12.dp))
+    }
+}
+
+private fun sectionIcon(code: String): androidx.compose.ui.graphics.vector.ImageVector {
+    val i = androidx.compose.material.icons.Icons.Outlined
+    return when (code) {
+        "MONOGRAFIA" -> androidx.compose.material.icons.Icons.AutoMirrored.Outlined.MenuBook
+        "CARTOGRAF" -> androidx.compose.material.icons.Icons.Outlined.Map
+        "MANUSCRITO" -> androidx.compose.material.icons.Icons.Outlined.HistoryEdu
+        "ILUSFOT", "FOTOS" -> androidx.compose.material.icons.Icons.Outlined.PhotoLibrary
+        "CARTEIS" -> androidx.compose.material.icons.Icons.Outlined.Campaign
+        "POSTAIS" -> androidx.compose.material.icons.Icons.Outlined.Mail
+        "EPHEMERA" -> androidx.compose.material.icons.Icons.Outlined.Receipt
+        "ARQUIVOS" -> androidx.compose.material.icons.Icons.Outlined.Inventory2
+        "ARQCDB", "ARQCCM" -> androidx.compose.material.icons.Icons.Outlined.Person
+        "SONS" -> androidx.compose.material.icons.Icons.Outlined.GraphicEq
+        "AUDIOVISUA" -> androidx.compose.material.icons.Icons.Outlined.Movie
+        "MUSICA" -> androidx.compose.material.icons.Icons.Outlined.MusicNote
+        else -> i.Folder
     }
 }
 
@@ -653,12 +705,12 @@ internal fun CatalogueProvenance(detail: CollectionDetail, modifier: Modifier = 
         val rights = detail.metadata.filter { it.isRights() }
         rights.forEach { field ->
             Text(field.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            SelectionContainer { Text(field.value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)) }
+            SelectionContainer { Text(localizeSourcePhrase(field.value), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)) }
         }
-        if (rights.isEmpty()) Text("Consulta las condiciones de uso en el registro original.",
+        if (rights.isEmpty()) Text(tr("Consulta as condicións de uso no rexistro orixinal.", "Consulta las condiciones de uso en el registro original."),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         detail.sourceUrl?.let { url ->
-            TextButton(onClick = { browser.openUri(url) }) { Text("Registro original · abre el navegador") }
+            TextButton(onClick = { browser.openUri(url) }) { Text(tr("Rexistro orixinal · abre o navegador", "Registro original · abre el navegador")) }
         }
     }
 }
@@ -668,7 +720,7 @@ internal fun CatalogueFields(detail: CollectionDetail, modifier: Modifier = Modi
     var originalExpanded by rememberSaveable(detail.sourceUrl) { mutableStateOf(false) }
     Column(modifier.fillMaxWidth()) {
         val fields = detail.metadata.filterNot { it.isRights() }
-        if (fields.isNotEmpty()) Text("Datos del catálogo", style = MaterialTheme.typography.titleMedium,
+        if (fields.isNotEmpty()) Text(tr("Datos do catálogo", "Datos del catálogo"), style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(bottom = 16.dp))
         fields.forEach { field ->
             var expanded by rememberSaveable(detail.sourceUrl, field.label, field.value) { mutableStateOf(false) }
@@ -679,13 +731,13 @@ internal fun CatalogueFields(detail: CollectionDetail, modifier: Modifier = Modi
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)) }
             if (long) TextButton(onClick = { expanded = !expanded }) {
-                Text(if (expanded) "Mostrar menos" else "Leer campo completo: ${field.label}")
+                Text(if (expanded) "Mostrar menos" else tr("Ler campo completo: ${field.label}", "Leer campo completo: ${field.label}"))
             }
             androidx.compose.material3.HorizontalDivider(Modifier.padding(bottom = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
         }
         if (detail.description.isNotBlank()) {
             TextButton(onClick = { originalExpanded = !originalExpanded }) {
-                Text(if (originalExpanded) "Ocultar texto completo de la ficha" else "Texto completo de la ficha")
+                Text(if (originalExpanded) tr("Ocultar texto completo da ficha", "Ocultar texto completo de la ficha") else tr("Texto completo da ficha", "Texto completo de la ficha"))
             }
             if (originalExpanded) SelectionContainer { Text(detail.description, style = MaterialTheme.typography.bodyMedium) }
         }

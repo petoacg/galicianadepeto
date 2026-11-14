@@ -1,5 +1,6 @@
 package gal.galiciana.app.ui
 
+import gal.galiciana.app.i18n.tr
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,6 +25,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NamedNavArgument
+import androidx.navigation.NavBackStackEntry
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.background
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import gal.galiciana.app.ui.colecciones.ColeccionesScreen
@@ -58,31 +64,57 @@ private fun GalicianaContent(onDataRestored: () -> Unit) {
     val backEntry by nav.currentBackStackEntryAsState()
     val route = backEntry?.destination?.route.orEmpty()
     val reader = route.startsWith("viewer/")
-    val activeTab = when {
+    // Destinations own their tab; screens reachable from several places (Acerca de,
+    // Aviso legal, Copia de tus datos, fichas) keep the tab the user arrived from.
+    var activeTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("home") }
+    val owner = when {
         route == "favoritos" -> "favoritos"
-        route == "explore" || route == "hemeroteca" || route == "colecciones" || route == "datos" || route == "about" || route == "legal" || route.startsWith("featured/") -> "explore"
-        else -> "home"
+        route == "explore" || route == "hemeroteca" || route == "colecciones" || route == "datos" -> "explore"
+        route == "home" || route.startsWith("search") -> "home"
+        else -> null
+    }
+    androidx.compose.runtime.SideEffect { if (owner != null && owner != activeTab) activeTab = owner }
+    // Compact windows keep the bottom bar; tablets, foldables and landscape use a rail.
+    val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
+    val tabs = listOf(Triple("home", "Buscar", Icons.Outlined.Search),
+        Triple("explore", "Explorar", Icons.Outlined.Explore),
+        Triple("favoritos", tr("Gardados", "Guardados"), Icons.Outlined.Bookmarks))
+    fun openTab(target: String) {
+        // Tabs always open their named destination. Restoring a saved
+        // nested stack here could send Buscar back to Acerca de.
+        if (route != target) nav.navigate(target) {
+            popUpTo("home")
+            launchSingleTop = true
+        }
     }
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0), bottomBar = {
-        if (!reader) NavigationBar(containerColor = MaterialTheme.colorScheme.surface,
+        if (!reader && !wide) NavigationBar(containerColor = MaterialTheme.colorScheme.surface,
             tonalElevation = 0.dp) {
-            listOf(Triple("home", "Buscar", Icons.Outlined.Search),
-                Triple("explore", "Explorar", Icons.Outlined.Explore),
-                Triple("favoritos", "Guardados", Icons.Outlined.Bookmarks)).forEach { (target, label, icon) ->
-                NavigationBarItem(selected = activeTab == target, enabled = !dataBusy, onClick = {
-                    // Tabs always open their named destination. Restoring a saved
-                    // nested stack here could send Buscar back to Acerca de.
-                    if (route != target) nav.navigate(target) {
-                        popUpTo("home")
-                        launchSingleTop = true
-                    }
-                }, icon = { Icon(icon, null) }, label = { Text(label) })
+            tabs.forEach { (target, label, icon) ->
+                NavigationBarItem(selected = activeTab == target, enabled = !dataBusy, onClick = { openTab(target) },
+                    icon = { Icon(icon, null) }, label = { NavLabel(label) })
             }
         }
     }) { appPadding ->
+    // Without the bottom bar, content must clear the system navigation bar itself.
+    val railInsets = if (wide && !reader) Modifier.windowInsetsPadding(
+        WindowInsets.navigationBars.union(WindowInsets.displayCutout)
+            .only(WindowInsetsSides.Bottom + WindowInsetsSides.End)) else Modifier
+    // The strip behind the system buttons takes the rail's surface, so headers and
+    // rail read as one frame instead of leaving a darker gap beside the top bar.
+    Row(Modifier.padding(appPadding).fillMaxSize()
+        .then(if (wide && !reader) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier)
+        .then(railInsets)) {
+    if (!reader && wide) NavigationRail(containerColor = MaterialTheme.colorScheme.surface) {
+        Spacer(Modifier.height(8.dp))
+        tabs.forEach { (target, label, icon) ->
+            NavigationRailItem(selected = activeTab == target, enabled = !dataBusy, onClick = { openTab(target) },
+                icon = { Icon(icon, null) }, label = { NavLabel(label) })
+        }
+    }
     NavHost(
         navController = nav,
-        modifier = Modifier.padding(appPadding),
+        modifier = Modifier.weight(1f).fillMaxHeight().background(MaterialTheme.colorScheme.background),
         startDestination = "home",
         enterTransition = {
             fadeIn(tween(220)) + slideInHorizontally(tween(260)) { it / 18 }
@@ -93,20 +125,27 @@ private fun GalicianaContent(onDataRestored: () -> Unit) {
             fadeOut(tween(160)) + slideOutHorizontally(tween(240)) { it / 18 }
         },
     ) {
-        composable("backup") { BackupScreen(onBack = { nav.popBackStack() }, onRestored = onDataRestored,
+        screen("backup") { BackupScreen(onBack = { nav.popBackStack() }, onRestored = onDataRestored,
             onBusyChanged = { dataBusy = it }) }
-        composable("searches") { gal.galiciana.app.ui.search.SearchHistoryScreen(onBack = { nav.popBackStack() }, onOpen = { preset ->
+        screen("searches") { gal.galiciana.app.ui.search.SearchHistoryScreen(onBack = { nav.popBackStack() },
+            // From the form, go back to it; from Inicio, open it in place of this list.
+            onForm = {
+                val fromForm = nav.previousBackStackEntry?.destination?.route?.startsWith("search") == true
+                nav.popBackStack()
+                if (!fromForm) nav.navigate("search?q=&t=&f=true")
+            },
+            onOpen = { preset ->
             nav.navigate("search?preset=${android.net.Uri.encode(preset.json().toString())}")
         }) }
-        composable("about") { AboutScreen(onBack = { nav.popBackStack() }, onLegal = { nav.navigate("legal") },
+        screen("about") { AboutScreen(onBack = { nav.popBackStack() }, onLegal = { nav.navigate("legal") },
             onBackup = { nav.navigate("backup") }) }
-        composable("legal") { LegalScreen(onBack = { nav.popBackStack() }) }
-        composable("explore") {
+        screen("legal") { LegalScreen(onBack = { nav.popBackStack() }) }
+        screen("explore") {
             ExploreScreen(onHemeroteca = { nav.navigate("hemeroteca") },
                 onCollections = { nav.navigate("colecciones") }, onData = { nav.navigate("datos") },
                 onAbout = { nav.navigate("about") })
         }
-        composable("home") {
+        screen("home") {
             HomeScreen(
                 onHistory = { nav.navigate("searches") },
                 onOpenSearch = { nav.navigate("search?q=&t=&f=true") },
@@ -123,7 +162,7 @@ private fun GalicianaContent(onDataRestored: () -> Unit) {
                 onOpenFeatured = { id, title -> nav.navigate("featured/$id?title=${android.net.Uri.encode(title)}") },
             )
         }
-        composable("featured/{id}?title={title}", arguments = listOf(navArgument("title") { type = NavType.StringType; defaultValue = "" })) { entry ->
+        screen("featured/{id}?title={title}", arguments = listOf(navArgument("title") { type = NavType.StringType; defaultValue = "" })) { entry ->
             FeaturedScreen(
                 recordId = entry.arguments?.getString("id").orEmpty(),
                 seedTitle = entry.arguments?.getString("title").orEmpty(),
@@ -132,7 +171,7 @@ private fun GalicianaContent(onDataRestored: () -> Unit) {
                 onOpenPath = { path -> nav.navigate("viewer/$path/1/-/-") },
             )
         }
-        composable(
+        screen(
             route = "search?q={q}&t={t}&f={f}&preset={preset}",
             arguments = listOf(
                 navArgument("q") { type = NavType.StringType; defaultValue = "" },
@@ -159,7 +198,7 @@ private fun GalicianaContent(onDataRestored: () -> Unit) {
                 onHome = { nav.popBackStack("home", inclusive = false) },
             )
         }
-        composable("hemeroteca") {
+        screen("hemeroteca") {
             HemerotecaScreen(
                 onHome = { nav.popBackStack() },
                 onConsulta = { nav.navigate("search") },
@@ -168,7 +207,7 @@ private fun GalicianaContent(onDataRestored: () -> Unit) {
                 onFavoritos = { nav.navigate("favoritos") },
             )
         }
-        composable("colecciones") {
+        screen("colecciones") {
             ColeccionesScreen(
                 onHome = { nav.popBackStack() },
                 onConsulta = { nav.navigate("search") },
@@ -186,7 +225,7 @@ private fun GalicianaContent(onDataRestored: () -> Unit) {
                 },
             )
         }
-        composable("datos") {
+        screen("datos") {
             DatosScreen(
                 onHome = { nav.popBackStack() },
                 onConsulta = { nav.navigate("search") },
@@ -198,7 +237,7 @@ private fun GalicianaContent(onDataRestored: () -> Unit) {
                 },
             )
         }
-        composable("favoritos") {
+        screen("favoritos") {
             FavScreen(
                 onBackup = { nav.navigate("backup") },
                 browseState = favoritesBrowse,
@@ -243,4 +282,22 @@ private fun GalicianaContent(onDataRestored: () -> Unit) {
         }
     }
     }
+    }
+}
+
+/** Lists and forms keep a readable measure on wide windows; the viewer stays full width. */
+private fun NavGraphBuilder.screen(
+    route: String,
+    arguments: List<NamedNavArgument> = emptyList(),
+    content: @Composable (NavBackStackEntry) -> Unit,
+) = composable(route, arguments) { entry ->
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.widthIn(max = 840.dp).fillMaxSize()) { content(entry) }
+    }
+}
+
+/** Destination labels stay on one line; see [CappedFontScale]. */
+@Composable
+private fun NavLabel(text: String) {
+    CappedFontScale { Text(text, maxLines = 1, softWrap = false) }
 }

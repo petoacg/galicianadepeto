@@ -7,3 +7,13 @@ local.properties
 .DS_Store
 
 /backups/
+
+# APK firmados o compilados: nunca al repositorio
+*.apk
+*.aab
+# Claves de firma
+*.jks
+*.keystore
+*.p12
+*.pass
+*.idsig

@@ -1,11 +1,22 @@
 package gal.galiciana.app.data
 
+import gal.galiciana.app.i18n.tr
 import android.content.Context
 import gal.galiciana.app.domain.OcrHit
 import org.json.JSONArray
 import org.json.JSONObject
 
 class LocalStore(context: Context) {
+    private class FavCache(val favRaw: String?, val notesRaw: String?,
+                           val lookups: Map<String, String?>, val hits: List<OcrHit>)
+
+    private companion object {
+        // Shared by every LocalStore instance: they all read the same preferences file.
+        @Volatile var favCache: FavCache? = null
+        @Volatile var notesCache: Pair<String, Map<String, String>>? = null
+        @Volatile var folderMapCache: Pair<String, Map<String, String>>? = null
+    }
+
     private val prefs = context.getSharedPreferences("galiciana_fans", Context.MODE_PRIVATE)
 
     private fun validFavorites(raw: String?): JSONArray? = raw?.let {
@@ -29,8 +40,8 @@ class LocalStore(context: Context) {
     }
 
     fun favoritesStorageNotice(): String? = when {
-        readFavoriteArray() == null -> "No se puede leer el archivo de favoritos. Se han conservado los datos y bloqueado los cambios para evitar pérdidas."
-        prefs.getBoolean("fav_recovered", false) -> "Se recuperó la última copia legible de favoritos tras un error de lectura. Puede faltar el cambio más reciente."
+        readFavoriteArray() == null -> tr("Non se pode ler o arquivo de páxinas gardadas. Conserváronse os datos e bloqueáronse os cambios para evitar perdas.", "No se puede leer el archivo de favoritos. Se han conservado los datos y bloqueado los cambios para evitar pérdidas.")
+        prefs.getBoolean("fav_recovered", false) -> tr("Recuperouse a última copia lexible das páxinas gardadas tras un erro de lectura. Pode faltar o cambio máis recente.", "Se recuperó la última copia legible de favoritos tras un error de lectura. Puede faltar el cambio más reciente.")
         else -> null
     }
 
@@ -86,8 +97,22 @@ class LocalStore(context: Context) {
     }.getOrNull()
 
     fun favHits(): List<OcrHit> {
+        // Parsing the whole archive on every row or keystroke made lists and the
+        // note editor stutter. The cache is keyed on the exact stored text plus every
+        // catalogue title the result depended on, so any write invalidates it. Only
+        // text that already parsed cleanly is cached, so a hit needs no revalidation.
+        favCache?.let { cached ->
+            if (cached.favRaw == prefs.getString("fav_json", "[]") &&
+                cached.notesRaw == prefs.getString("notes_json", "{}") &&
+                cached.lookups.all { (key, value) -> prefs.getString(key, null) == value }) return cached.hits
+        }
         val arr = readFavoriteArray() ?: return emptyList()
-        return runCatching {
+        // Read after readFavoriteArray(): it may have restored the backup copy.
+        val favRaw = prefs.getString("fav_json", "[]")
+        val notesRaw = prefs.getString("notes_json", "{}")
+        val lookups = mutableMapOf<String, String?>()
+        fun tracked(key: String): String? = prefs.getString(key, null).also { lookups[key] = it }
+        val hits = runCatching {
             val notes = notesMap()
             (0 until arr.length()).mapNotNull { i -> runCatching {
                 val o = arr.getJSONObject(i)
@@ -95,8 +120,10 @@ class LocalStore(context: Context) {
                 val pos = o.optInt("pos", 1)
                 val titleRaw = o.optString("title")
                 OcrHit(
-                    title = titleRaw.takeIf { !weakTitle(it) } ?: path?.let { workTitle(it) } ?: titleRaw,
-                    parentTitle = o.optString("parent").ifBlank { null } ?: path?.let { workParent(it) },
+                    title = titleRaw.takeIf { !weakTitle(it) }
+                        ?: path?.let { tracked("work_$it")?.takeIf { t -> !weakTitle(t) } } ?: titleRaw,
+                    parentTitle = o.optString("parent").ifBlank { null }
+                        ?: path?.let { tracked("workp_$it")?.takeIf { t -> t.isNotBlank() && !weakTitle(t) } },
                     snippets = o.optString("snips").split("\n\n").filter { it.isNotBlank() },
                     path = path,
                     imageId = o.optString("imageId").ifBlank { null },
@@ -106,6 +133,8 @@ class LocalStore(context: Context) {
                 )
             }.getOrNull() }
         }.getOrDefault(emptyList())
+        favCache = FavCache(favRaw, notesRaw, lookups.toMap(), hits)
+        return hits
     }
 
     fun isFav(path: String?, pos: Int?): Boolean {
@@ -124,7 +153,7 @@ class LocalStore(context: Context) {
     }
 
     private fun weakTitle(t: String) =
-        t.isBlank() || t.equals("Documento", true) || t.startsWith("Pág") || t.startsWith("Página") || t == "Página"
+        t.isBlank() || t.equals("Documento", true) || t.startsWith("Pág") || t.startsWith("Páx") || t == "Página"
 
     fun toggleHit(hit: OcrHit, useOpenedResult: Boolean = false): Boolean {
         if (readFavoriteArray() == null) return false
@@ -242,11 +271,13 @@ class LocalStore(context: Context) {
 
     private fun notesMap(): MutableMap<String, String> {
         val raw = prefs.getString("notes_json", "{}") ?: "{}"
+        notesCache?.let { (cachedRaw, map) -> if (cachedRaw == raw) return map.toMutableMap() }
         val out = mutableMapOf<String, String>()
         runCatching {
             val o = JSONObject(raw)
             o.keys().forEach { k -> out[k] = o.optString(k) }
         }
+        notesCache = raw to out.toMap()
         return out
     }
 
@@ -344,6 +375,32 @@ class LocalStore(context: Context) {
         prefs.edit().putString("fav_folders", arr.toString()).apply()
     }
 
+    /** Renames a folder everywhere it is used. False when the new name is empty or taken. */
+    fun renameFolder(from: String, to: String): Boolean {
+        val old = from.trim()
+        val new = to.trim()
+        if (old.isBlank() || new.isBlank() || old.equals("Archivador general", true) ||
+            new.equals("Archivador general", true)) return false
+        val list = folders()
+        if (list.none { it.equals(old, true) }) return false
+        if (!old.equals(new, true) && list.any { it.equals(new, true) }) return false
+        val arr = org.json.JSONArray()
+        list.forEach { arr.put(if (it.equals(old, true)) new else it) }
+        val o = org.json.JSONObject(prefs.getString("fav_folder_map", "{}") ?: "{}")
+        o.keys().asSequence().toList().forEach { key ->
+            val names = parseFolderList(o.optString(key))
+            if (names.any { it.equals(old, true) }) {
+                val a = org.json.JSONArray()
+                names.forEach { a.put(if (it.equals(old, true)) new else it) }
+                o.put(key, a)
+            }
+        }
+        return prefs.edit()
+            .putString("fav_folders", arr.toString())
+            .putString("fav_folder_map", o.toString())
+            .commit()
+    }
+
     fun removeFolder(name: String) {
         val n = name.trim()
         if (n.isBlank() || n.equals("Archivador general", true)) return
@@ -381,10 +438,13 @@ class LocalStore(context: Context) {
     fun foldersOf(path: String?, pos: Int?): List<String> {
         val p = path ?: return emptyList()
         val raw = prefs.getString("fav_folder_map", "{}") ?: "{}"
-        return runCatching {
-            val o = org.json.JSONObject(raw)
-            parseFolderList(o.optString("$p|${pos ?: 1}"))
-        }.getOrDefault(emptyList())
+        // Rows ask for their folders on every recomposition; parse the map once per change.
+        val map = folderMapCache?.takeIf { it.first == raw }?.second
+            ?: runCatching { org.json.JSONObject(raw) }.getOrNull()?.let { o ->
+                o.keys().asSequence().associateWith { o.optString(it) }
+            }?.also { folderMapCache = raw to it }
+            ?: return emptyList()
+        return runCatching { parseFolderList(map["$p|${pos ?: 1}"].orEmpty()) }.getOrDefault(emptyList())
     }
 
     fun folderOf(path: String?, pos: Int?): String = foldersOf(path, pos).firstOrNull().orEmpty()

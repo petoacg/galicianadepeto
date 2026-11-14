@@ -1,5 +1,7 @@
 package gal.galiciana.app.ui
 
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import gal.galiciana.app.i18n.tr
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Column
@@ -51,9 +53,10 @@ fun FolderPickSheet(
     path: String?,
     position: Int?,
     onDismiss: () -> Unit,
+    onConfirmed: () -> Unit = {},
 ) {
     val archivador = "Archivador general"
-    var draft by remember { mutableStateOf("") }
+    var draft by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
     var folders by remember { mutableStateOf(listOf(archivador) + store.folders().filterNot { it.equals(archivador, true) }) }
     var selected by remember {
         val have = store.foldersOf(path, position)
@@ -77,9 +80,9 @@ fun FolderPickSheet(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 16.dp)
         ) {
-            Text("Guardar en", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(tr("Gardar en", "Guardar en"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-                "Puedes marcar varias a la vez.",
+                tr("Podes marcar varios á vez.", "Puedes marcar varias a la vez."),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
@@ -102,12 +105,12 @@ fun FolderPickSheet(
                         ).padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        FolderMark(on = on)
+                        androidx.compose.material3.Checkbox(checked = on, onCheckedChange = null)
                         Spacer(Modifier.width(8.dp))
-                        Text(name, modifier = Modifier.weight(1f))
+                        Text(gal.galiciana.app.i18n.folderLabel(name), modifier = Modifier.weight(1f))
                         if (!name.equals(archivador, true)) {
                             IconButton(onClick = { pendingDelete = name }, modifier = Modifier.size(48.dp)) {
-                                Icon(Icons.Filled.Delete, contentDescription = "Borrar carpeta $name", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Filled.Delete, contentDescription = tr("Eliminar cartafol $name", "Eliminar carpeta $name"), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                             }
                         }
                     }
@@ -115,11 +118,10 @@ fun FolderPickSheet(
             }
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("+", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.width(4.dp))
-                Icon(Icons.Filled.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Nueva", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Icon(androidx.compose.material.icons.Icons.Outlined.CreateNewFolder, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(tr("Novo cartafol", "Nueva carpeta"), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextField(
@@ -132,7 +134,7 @@ fun FolderPickSheet(
                         focus.clearFocus()
                         keyboard?.hide()
                     }),
-                    placeholder = { Text("Nombre") },
+                    label = { Text(tr("Nome do cartafol", "Nombre de la carpeta")) },
                 )
                 Spacer(Modifier.width(8.dp))
                 TextButton(onClick = {
@@ -143,29 +145,30 @@ fun FolderPickSheet(
                         selected = selected + n
                         draft = ""
                     }
-                }, enabled = draft.isNotBlank()) { Text("Añadir") }
+                }, enabled = draft.isNotBlank()) { Text(tr("Engadir", "Añadir")) }
             }
             Spacer(Modifier.height(12.dp))
             Button(
                 onClick = {
                     store.setFolders(path, position, selected.ifEmpty { setOf(archivador) }.toList())
+                    onConfirmed()
                     onDismiss()
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Listo") }
+            ) { Text(tr("Feito", "Listo")) }
         }
     pendingDelete?.let { target ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("Borrar carpeta") },
-            text = { Text("¿Borrar «$target»? Las páginas se conservan en sus otras carpetas; las que no tengan ninguna pasarán al archivador general.") },
+            title = { Text(tr("Eliminar cartafol", "Eliminar carpeta")) },
+            text = { Text(tr("Eliminar «$target»? As páxinas consérvanse nos seus outros cartafoles; as que non teñan ningún pasarán ao arquivador xeral.", "¿Eliminar «$target»? Las páginas se conservan en sus otras carpetas; las que no tengan ninguna pasarán al archivador general.")) },
             confirmButton = {
                 TextButton(onClick = {
                     store.removeFolder(target)
                     folders = listOf(archivador) + store.folders().filterNot { it.equals(archivador, true) }
                     selected = selected.filterNot { it.equals(target, true) }.ifEmpty { setOf(archivador) }.toSet()
                     pendingDelete = null
-                }) { Text("Borrar") }
+                }) { Text("Eliminar", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) { Text("Cancelar") }
@@ -173,14 +176,4 @@ fun FolderPickSheet(
         )
     }
     }
-}
-
-@Composable
-private fun FolderMark(on: Boolean) {
-    Icon(
-        imageVector = if (on) Icons.Filled.Folder else Icons.Outlined.Folder,
-        contentDescription = null,
-        tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.size(28.dp),
-    )
 }

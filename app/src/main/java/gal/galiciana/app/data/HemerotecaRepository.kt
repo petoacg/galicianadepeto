@@ -1,5 +1,6 @@
 package gal.galiciana.app.data
 
+import gal.galiciana.app.i18n.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -40,7 +41,7 @@ class HemerotecaRepository {
         require(url == index || url.startsWith("$index?"))
         val html = Http.client.newCall(Request.Builder().url(url).build()).execute().use { response ->
             if (!response.isSuccessful) error("Galiciana: HTTP ${response.code}")
-            response.body?.string() ?: error("Respuesta vacía de Galiciana")
+            response.body?.string() ?: error(tr("Resposta baleira de Galiciana", "Respuesta vacía de Galiciana"))
         }
         parseIndice(html, url)
     }
@@ -85,7 +86,7 @@ class HemerotecaRepository {
             RegexOption.IGNORE_CASE,
         ).containsMatchIn(doc.body().text())
         check(cabeceras.isNotEmpty() || hasNavigation || emptyTable || emptyMessage) {
-            "Galiciana no ha devuelto un índice de publicaciones reconocible. Vuelve a intentarlo."
+            tr("Galiciana non devolveu o índice de publicacións. Téntao de novo.", "Galiciana no ha devuelto el índice de publicaciones. Vuelve a intentarlo.")
         }
         val currentLabels = doc.select(".pagina_actual").map { it.text().trim() }
         val currentPage = currentLabels.firstNotNullOfOrNull { it.toIntOrNull() }
@@ -135,7 +136,7 @@ class HemerotecaRepository {
     suspend fun searchIndice(query: String): IndiceCabeceras = withContext(Dispatchers.IO) {
         val page = Http.client.newCall(Request.Builder().url("$index?letra=A&posicion=1").build()).execute().use { response ->
             if (!response.isSuccessful) error("Galiciana: HTTP ${response.code}")
-            response.body?.string() ?: error("Respuesta vacía de Galiciana")
+            response.body?.string() ?: error(tr("Resposta baleira de Galiciana", "Respuesta vacía de Galiciana"))
         }
         val doc = Jsoup.parse(page, index)
         val form = doc.select("form").firstOrNull { candidate ->
@@ -144,15 +145,15 @@ class HemerotecaRepository {
                     candidate.text().contains("titulo", true) ||
                     candidate.select("input").any { it.attr("name").contains("titulo", true) ||
                         it.attr("name").contains("title", true) })
-        } ?: error("No se encontró el formulario de títulos de Hemeroteca")
+        } ?: error(tr("Non se atopou o formulario de títulos da Hemeroteca", "No se encontró el formulario de títulos de Hemeroteca"))
         val input = form.select("input[type=text], input:not([type])")
             .firstOrNull { it.attr("name").contains("titulo", true) ||
                 it.attr("name").contains("title", true) }
             ?: form.selectFirst("input[type=text], input:not([type])")
-            ?: error("El formulario no tiene un campo de búsqueda")
+            ?: error(tr("O formulario non ten un campo de busca", "El formulario no tiene un campo de búsqueda"))
         val action = form.absUrl("action").ifBlank { index }
         require(action.startsWith("${GalicianaUrls.BASE}/es/publicaciones/")) {
-            "La búsqueda de Hemeroteca usa una ruta desconocida"
+            tr("A busca da Hemeroteca usa unha ruta descoñecida", "La búsqueda de Hemeroteca usa una ruta desconocida")
         }
         // HTML submits only the clicked submit button. Sending "Limpiar" as well
         // cancels the title filter on this catalogue.
@@ -170,13 +171,13 @@ class HemerotecaRepository {
             Request.Builder().url(action).post(body).build()
         } else {
             val url = action.toHttpUrlOrNull()?.newBuilder()
-                ?: error("Dirección de Hemeroteca inválida")
+                ?: error(tr("Enderezo da Hemeroteca non válido", "Dirección de Hemeroteca inválida"))
             fields.forEach { (key, value) -> url.setQueryParameter(key, value) }
             Request.Builder().url(url.build()).build()
         }
         val html = Http.client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("Galiciana: HTTP ${response.code}")
-            response.body?.string() ?: error("Respuesta vacía de Galiciana")
+            response.body?.string() ?: error(tr("Resposta baleira de Galiciana", "Respuesta vacía de Galiciana"))
         }
         val result = parseIndice(html, request.url.toString())
         val matching = result.cabeceras.filter { matches(it.title, query) }
@@ -243,7 +244,7 @@ class HemerotecaRepository {
         ).execute().use { response ->
             if (!response.isSuccessful) error("Galiciana: HTTP ${response.code}")
             response.body?.string()?.takeIf { it.isNotBlank() }
-                ?: error("Galiciana no ha devuelto números")
+                ?: error(tr("Galiciana non devolveu números", "Galiciana no ha devuelto números"))
         }
 
     fun parseNumeros(html: String, selectedYear: String? = null): List<Numero> {
@@ -259,7 +260,7 @@ class HemerotecaRepository {
                 .find(context)?.value?.trim()
             val displayDate = date?.let { "%02d/%02d/%04d".format(it.dayOfMonth, it.monthValue, it.year) }
             val label = listOfNotNull(number, displayDate).joinToString(" · ")
-                .ifBlank { "Ejemplar sin fecha identificada" }
+                .ifBlank { tr("Exemplar sen data identificada", "Ejemplar sin fecha identificada") }
             Numero(label, path, date, date?.monthValue ?: monthIn(context))
         }.distinctBy { it.path }.sortedWith(compareBy<Numero> { it.date ?: LocalDate.MAX }
             .thenBy { it.month ?: 13 })
@@ -318,8 +319,8 @@ class HemerotecaRepository {
             runCatching { LocalDate.of(year, month, day) }.getOrNull() else null
     }
 
-    fun monthName(month: Int): String = listOf("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre").getOrNull(month - 1) ?: "Mes $month"
+    fun monthName(month: Int): String = listOf(tr("Xaneiro", "Enero"), tr("Febreiro", "Febrero"), "Marzo", "Abril", tr("Maio", "Mayo"), tr("Xuño", "Junio"),
+        tr("Xullo", "Julio"), "Agosto", tr("Setembro", "Septiembre"), tr("Outubro", "Octubre"), tr("Novembro", "Noviembre"), tr("Decembro", "Diciembre")).getOrNull(month - 1) ?: "Mes $month"
 
     private fun decode(s: String) = s
         .replace("&amp;", "&")

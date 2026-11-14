@@ -1,5 +1,6 @@
 package gal.galiciana.app.ui.home
 
+import gal.galiciana.app.i18n.tr
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -47,8 +48,9 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val store = remember { LocalStore(context) }
-    val saved = store.favHits()
-    val lastReading = store.lastReading()
+    // Home never edits saved pages; read them once per visit instead of on every keystroke.
+    val saved = remember { store.favHits() }
+    val lastReading = remember { store.lastReading() }
     var query by rememberSaveable { mutableStateOf("") }
     var showSources by rememberSaveable { mutableStateOf(false) }
     fun search() {
@@ -58,38 +60,42 @@ fun HomeScreen(
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
     }
 
-    Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
+    Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0), topBar = {
+        BrandHeader(current = "Buscar", onConsulta = onOpenSearch,
+            onFavoritos = onFavoritos, compact = true, onAbout = onAbout, homeAction = false)
+    }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().imePadding()
             .verticalScroll(rememberScrollState())) {
-            BrandHeader(current = "Buscar", onConsulta = onOpenSearch,
-                onFavoritos = onFavoritos, compact = true, onAbout = onAbout)
             Column(Modifier.widthIn(max = 720.dp).align(Alignment.CenterHorizontally)
                 .fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp)) {
                 Text("Busca en Galiciana", style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
                 Spacer(Modifier.height(8.dp))
-                Text("Personas, lugares e historias entre sus páginas.",
+                Text(tr("Persoas, lugares e historias entre as súas páxinas.", "Personas, lugares e historias entre sus páginas."),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(16.dp))
                 ClearableField(value = query, onValueChange = { query = it },
-                    placeholder = "Palabras, personas o lugares", label = "Tu búsqueda",
-                    onSearch = { search() })
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = { search() }, enabled = normalizeSearchInput(query).isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    shape = RoundedCornerShape(12.dp)) {
-                    Icon(Icons.Filled.Search, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Buscar")
+                    placeholder = tr("Palabras, persoas ou lugares", "Palabras, personas o lugares"), label = tr("A túa busca", "Tu búsqueda"),
+                    onSearch = { search() }, searchLabel = tr("Buscar en Galiciana", "Buscar en Galiciana"))
+                // The field is the search: Enter or its own button. A wide button appears only with text.
+                if (normalizeSearchInput(query).isNotBlank()) {
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = { search() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(12.dp)) {
+                        Icon(Icons.Filled.Search, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Buscar")
+                    }
                 }
+                Spacer(Modifier.height(4.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = onHistory) { Text("Tus búsquedas") }
+                    TextButton(onClick = onHistory) { Text(tr("As túas buscas", "Tus búsquedas")) }
                     TextButton(onClick = onOpenSearch) { Text("Buscar con filtros") }
                 }
                 if (lastReading?.path != null) {
                     Spacer(Modifier.height(12.dp))
-                    Text("Continuar leyendo", style = MaterialTheme.typography.titleMedium,
+                    Text(tr("Continuar lendo", "Continuar leyendo"), style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
                     val identity = gal.galiciana.app.ui.publicationIdentity(lastReading)
@@ -98,7 +104,7 @@ fun HomeScreen(
                         headlineContent = { Text(identity.shortTitle.ifBlank { "Documento" }, maxLines = 2,
                             overflow = TextOverflow.Ellipsis) },
                         supportingContent = {
-                            Text(listOfNotNull(identity.date, identity.issue, "Página ${lastReading.position ?: 1}").joinToString(" · "))
+                            Text(listOfNotNull(identity.date, identity.issue, tr("Páxina ${lastReading.position ?: 1}", "Página ${lastReading.position ?: 1}")).joinToString(" · "))
                         },
                         leadingContent = { lastReading.imageId?.let { id ->
                             AsyncImage(GalicianaUrls.thumb(id), contentDescription = null,
@@ -106,7 +112,7 @@ fun HomeScreen(
                                 contentScale = ContentScale.Crop)
                         } },
                         trailingContent = { Icon(Icons.AutoMirrored.Filled.ArrowForward, null) },
-                        modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable {
+                        modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(role = androidx.compose.ui.semantics.Role.Button) {
                             onOpenSaved(lastReading.path, lastReading.position ?: 1, lastReading.imageId, lastReading.savedQuery)
                         },
                     )
@@ -116,10 +122,10 @@ fun HomeScreen(
                     VieiraButton(selected = true, onClick = onFavoritos, size = 28.dp,
                         forcedCeleste = true)
                     Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                        Text("Guardados", style = MaterialTheme.typography.titleMedium,
+                        Text(tr("Gardados", "Guardados"), style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold)
-                        Text(if (saved.isEmpty()) "Guarda páginas con la vieira para volver a ellas."
-                            else "${saved.size} ${if (saved.size == 1) "página guardada" else "páginas guardadas"}",
+                        Text(if (saved.isEmpty()) tr("Garda páxinas coa vieira para volver a elas.", "Guarda páginas con la vieira para volver a ellas.")
+                            else tr("${saved.size} ${if (saved.size == 1) "páxina gardada" else "páxinas gardadas"}", "${saved.size} ${if (saved.size == 1) "página guardada" else "páginas guardadas"}"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -142,7 +148,7 @@ fun HomeScreen(
                                     style = MaterialTheme.typography.labelMedium,
                                     modifier = Modifier.padding(top = 6.dp))
                                 identity.date?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
-                                Text(listOfNotNull(identity.issue, "Página ${hit.position ?: 1}").joinToString(" · "),
+                                Text(listOfNotNull(identity.issue, tr("Páxina ${hit.position ?: 1}", "Página ${hit.position ?: 1}")).joinToString(" · "),
                                     style = MaterialTheme.typography.labelSmall)
                             }
                         }
@@ -155,7 +161,7 @@ fun HomeScreen(
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     items(ObrasDestacadas, key = { it.recordId }) { work ->
                         Column(Modifier.width(148.dp).clip(RoundedCornerShape(12.dp))
-                            .clickable { onOpenFeatured(work.recordId, work.title) }) {
+                            .clickable(role = androidx.compose.ui.semantics.Role.Button) { onOpenFeatured(work.recordId, work.title) }) {
                             AsyncImage(GalicianaUrls.thumb(work.imageId), null,
                                 modifier = Modifier.fillMaxWidth().height(168.dp)
                                     .background(MaterialTheme.colorScheme.surfaceVariant),
@@ -170,7 +176,6 @@ fun HomeScreen(
                     }
                 }
                 Spacer(Modifier.height(28.dp))
-                TextButton(onClick = onAbout) { Text("Acerca de · Aviso legal y fuentes") }
 
             }
         }

@@ -1,10 +1,18 @@
 package gal.galiciana.app.ui.viewer
 
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import gal.galiciana.app.i18n.tr
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -19,6 +27,10 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.heightIn
 import gal.galiciana.app.data.OcrRepository.AltoStatus
 import gal.galiciana.app.data.OcrRepository.AltoMatch
@@ -96,6 +108,9 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -111,6 +126,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import kotlin.math.roundToInt
@@ -145,7 +161,7 @@ fun ViewerScreen(
     val ocrRepo = remember { OcrRepository() }
     var doc by remember { mutableStateOf<MetsDocument?>(null) }
     var currentPos by rememberSaveable(path) { mutableIntStateOf(position.coerceAtLeast(1)) }
-    var ocr by remember { mutableStateOf("Cargando OCR…") }
+    var ocr by remember { mutableStateOf("") }  // empty until the page text has arrived
     var ocrPosition by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -167,6 +183,11 @@ fun ViewerScreen(
     var altoPage by remember { mutableStateOf(1f to 1f) }
     var altoMatches by remember { mutableStateOf<List<AltoMatch>>(emptyList()) }
     var ocrMatchCount by remember { mutableIntStateOf(0) }
+    var matchPages by remember(path) { mutableStateOf<Map<Int, Int>>(emptyMap()) }
+    var pagesChecked by remember(path) { mutableIntStateOf(0) }
+    var pagesToCheck by remember(path) { mutableIntStateOf(0) }
+    var pagesFailed by remember(path) { mutableIntStateOf(0) }
+    var landOnLastMatch by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var metadataRetry by remember(path) { mutableIntStateOf(0) }
     LaunchedEffect(path, metadataRetry) {
@@ -180,7 +201,7 @@ fun ViewerScreen(
                     loaded.pages.firstOrNull { it.imageId == wanted }?.let { currentPos = it.position }
                 }
             }
-            .onFailure { error = "No se pudo cargar la información de esta publicación. Vuelve atrás e inténtalo de nuevo." }
+            .onFailure { error = tr("Non se puido cargar a información desta publicación.", "No se pudo cargar la información de esta publicación.") }
         loading = false
     }
 
@@ -263,7 +284,51 @@ fun ViewerScreen(
         if (text != null) ocrCache[cacheKey] = text
         ocrPosition = currentPos
         ocrMatchCount = count
+        if (landOnLastMatch) {
+            hitAt = altoMatches.lastIndex.coerceAtLeast(0)
+            landOnLastMatch = false
+        }
         finding = false
+    }
+
+    // The query is read on the other pages too, so the reader can go from match to
+    // match across the document instead of paging blind.
+    LaunchedEffect(path, committedQuery, pageCount, searchRequest) {
+        matchPages = emptyMap()
+        pagesChecked = 0
+        pagesFailed = 0
+        val q = highlightTerms(committedQuery)
+        if (q.isBlank() || pageCount == 0) {
+            pagesToCheck = 0
+            return@LaunchedEffect
+        }
+        val order = issueScanOrder(currentPos, pageCount)
+        pagesToCheck = order.size
+        val gate = Semaphore(4)
+        coroutineScope {
+            order.forEach { pos ->
+                launch {
+                    gate.withPermit {
+                        val img = pages.firstOrNull { it.position == pos }?.imageId
+                        val key = "$pos|${img.orEmpty()}"
+                        val text = ocrCache[key] ?: try {
+                            withContext(Dispatchers.IO) { ocrRepo.loadPage(path, pos, img).ocrText }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            null
+                        }
+                        if (text == null) pagesFailed++
+                        else {
+                            ocrCache[key] = text
+                            val count = countMatches(text, q)
+                            if (count > 0) matchPages = matchPages + (pos to count)
+                        }
+                        pagesChecked++
+                    }
+                }
+            }
+        }
     }
 
     val ctxBar = androidx.compose.ui.platform.LocalContext.current
@@ -288,7 +353,7 @@ fun ViewerScreen(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            readerError = "No se pudo cargar el texto de esta página. Comprueba la conexión e inténtalo de nuevo."
+            readerError = tr("Non se puido cargar o texto desta páxina. Comproba a conexión e téntao de novo.", "No se pudo cargar el texto de esta página. Comprueba la conexión e inténtalo de nuevo.")
         } finally {
             readerLoading = false
         }
@@ -303,38 +368,73 @@ fun ViewerScreen(
         )
     }
     var pickFolder by remember { mutableStateOf(false) }
+    var goToPage by remember { mutableStateOf(false) }
+    var goToText by remember { mutableStateOf("") }
+    var noteTick by remember { mutableIntStateOf(0) }
+    val hasNote = remember(path, currentPos, fav, noteTick) { storeBar.noteOf(path, currentPos).isNotBlank() }
     var chooseDownloadFormat by remember { mutableStateOf(false) }
     var inFolders by remember { mutableStateOf(storeBar.foldersOf(path, currentPos).isNotEmpty()) }
     LaunchedEffect(path, currentPos, fav, pickFolder) {
         inFolders = storeBar.foldersOf(path, currentPos).isNotEmpty()
     }
 
+    val snackbar = remember { SnackbarHostState() }
     fun doDownload(format: PageFormat) {
         val id = imageId
         if (format == PageFormat.JPEG && id == null) return
-        android.widget.Toast.makeText(ctxBar, "Guardando página…", android.widget.Toast.LENGTH_SHORT).show()
-        scope.launch(Dispatchers.IO) {
-            val result = runCatching {
-                val bytes = if (format == PageFormat.PDF) PageDownloads.pdf(ctxBar, path, currentPos, id)
-                    else fetchFullGalicianaPage(path, currentPos, requireNotNull(id))
-                PageDownloads.save(ctxBar, path, currentPos, bytes, format)
+        val page = currentPos
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            val progress = launch { snackbar.showSnackbar(tr("Gardando a páxina $page…", "Guardando página $page…"), duration = SnackbarDuration.Indefinite) }
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val bytes = if (format == PageFormat.PDF) PageDownloads.pdf(ctxBar, path, page, id)
+                        else fetchFullGalicianaPage(path, page, requireNotNull(id))
+                    PageDownloads.save(ctxBar, path, page, bytes, format)
+                }
             }
-            withContext(Dispatchers.Main) {
-                android.widget.Toast.makeText(
-                    ctxBar,
-                    if (result.isSuccess) "Guardada en ${gal.galiciana.app.data.downloadLocation(format, android.os.Build.VERSION.SDK_INT)}"
-                    else result.exceptionOrNull()?.message ?: "No se pudo descargar la página",
-                    android.widget.Toast.LENGTH_LONG,
-                ).show()
+            snackbar.currentSnackbarData?.dismiss()
+            progress.cancel()
+            if (result.isSuccess) {
+                snackbar.showSnackbar(
+                    tr("Páxina $page gardada en ${gal.galiciana.app.data.downloadLocation(format, android.os.Build.VERSION.SDK_INT)}", "Página $page guardada en ${gal.galiciana.app.data.downloadLocation(format, android.os.Build.VERSION.SDK_INT)}"),
+                    withDismissAction = true, duration = SnackbarDuration.Long)
+            } else {
+                val retry = snackbar.showSnackbar(
+                    tr("Non se puido descargar a páxina. ${gal.galiciana.app.ui.friendlyError(result.exceptionOrNull())}", "No se pudo descargar la página. ${gal.galiciana.app.ui.friendlyError(result.exceptionOrNull())}"),
+                    actionLabel = "Reintentar", withDismissAction = true, duration = SnackbarDuration.Long)
+                if (retry == SnackbarResult.ActionPerformed && currentPos == page) doDownload(format)
             }
         }
+    }
+
+    if (goToPage) {
+        val wanted = goToText.toIntOrNull()
+        val valid = wanted != null && wanted in 1..pageCount
+        AlertDialog(
+            onDismissRequest = { goToPage = false },
+            title = { Text(tr("Ir á páxina", "Ir a la página")) },
+            text = {
+                OutlinedTextField(value = goToText, onValueChange = { goToText = it.filter(Char::isDigit).take(5) },
+                    singleLine = true, label = { Text(tr("Número de páxina (1–$pageCount)", "Número de página (1–$pageCount)")) },
+                    isError = goToText.isNotEmpty() && !valid,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Go),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = {
+                        if (valid) { currentPos = wanted!!; goToPage = false }
+                    }))
+            },
+            confirmButton = { TextButton(enabled = valid, onClick = { currentPos = wanted!!; goToPage = false }) { Text("Ir") } },
+            dismissButton = { TextButton(onClick = { goToPage = false }) { Text("Cancelar") } },
+        )
     }
 
     if (chooseDownloadFormat) {
         AlertDialog(
             onDismissRequest = { chooseDownloadFormat = false },
-            title = { Text("Descargar página $currentPos") },
-            text = { Text("Elige JPEG o PDF para esta página. El PDF incluye el texto OCR disponible para buscar o copiar; su selección no sigue la posición de las palabras en la imagen.") },
+            title = { Text(tr("Descargar a páxina $currentPos", "Descargar página $currentPos")) },
+            text = { Text(tr("Elixe JPEG ou PDF para esta páxina. O PDF inclúe o texto OCR dispoñible para buscar ou copiar; a súa selección non segue a posición das palabras na imaxe.", "Elige JPEG o PDF para esta página. El PDF incluye el texto OCR disponible para buscar o copiar; su selección no sigue la posición de las palabras en la imagen.")) },
             confirmButton = {
                 Row {
                     TextButton(onClick = {
@@ -360,41 +460,57 @@ fun ViewerScreen(
             startScan(q)
             return
         }
+        if (altoMatches.isNotEmpty() && hitAt < altoMatches.lastIndex) {
+            hitAt += 1
+            return
+        }
+        val next = adjacentMatchPage(matchPages.keys, currentPos, forward = true)
         when {
-            altoMatches.isNotEmpty() && hitAt < altoMatches.lastIndex -> hitAt += 1
-            altoMatches.isNotEmpty() -> hitAt = (hitAt + 1) % altoMatches.size
+            next != null -> currentPos = next
+            altoMatches.isNotEmpty() -> hitAt = 0
         }
     }
 
     fun goPrevHit() {
         showChrome = true
+        if (altoMatches.isNotEmpty() && hitAt > 0) {
+            hitAt -= 1
+            return
+        }
+        val previous = adjacentMatchPage(matchPages.keys, currentPos, forward = false)
         when {
-            altoMatches.size > 1 && hitAt > 0 -> hitAt -= 1
-            altoMatches.isNotEmpty() -> hitAt = (hitAt - 1 + altoMatches.size) % altoMatches.size
+            previous != null -> {
+                landOnLastMatch = true
+                currentPos = previous
+            }
+            altoMatches.isNotEmpty() -> hitAt = altoMatches.lastIndex
         }
     }
 
+    val otherMatchPages = matchPages.keys.any { it != currentPos }
     val hitLabel = when {
-        altoMatches.isNotEmpty() -> "${hitAt + 1} de ${altoMatches.size}"
+        altoMatches.isNotEmpty() -> tr("${hitAt + 1} de ${altoMatches.size} nesta páxina", "${hitAt + 1} de ${altoMatches.size} en esta página")
         locating -> "Localizando…"
-        finding -> "Consultando texto…"
-        ocrMatchCount > 0 -> "$ocrMatchCount en el texto"
-        else -> "Sin marcas"
+        finding -> tr("Consultando o texto…", "Consultando texto…")
+        ocrMatchCount > 0 -> tr("$ocrMatchCount no texto", "$ocrMatchCount en el texto")
+        otherMatchPages -> tr("Non está nesta páxina", "No está en esta página")
+        else -> tr("Sen marcas", "Sin marcas")
     }
     val searchStatus = when {
         committedQuery.isBlank() -> null
         altoMatches.isNotEmpty() -> if (!finding && ocrFailed)
-            "Las marcas están disponibles; no se pudo cargar el texto para leerlo." else null
+            tr("As marcas están dispoñibles; non se puido cargar o texto para lelo.", "Las marcas están disponibles; no se pudo cargar el texto para leerlo.") else null
         locating || finding -> null
         altoStatus == AltoStatus.UNAVAILABLE ->
-            "No se pudieron consultar las posiciones de las palabras. Puedes reintentar o leer el texto."
+            tr("Non se puideron consultar as posicións das palabras. Podes tentalo de novo ou ler o texto.", "No se pudieron consultar las posiciones de las palabras. Puedes reintentar o leer el texto.")
         altoStatus == AltoStatus.INVALID ->
-            "Las posiciones de esta página no permiten un marcado fiable. Puedes consultar el texto."
-        ocrFailed -> "No se pudo consultar el texto de esta página. Puedes reintentar."
+            tr("As posicións desta páxina non permiten un marcado fiable. Podes consultar o texto.", "Las posiciones de esta página no permiten un marcado fiable. Puedes consultar el texto.")
+        ocrFailed -> tr("Non se puido consultar o texto desta páxina. Podes tentalo de novo.", "No se pudo consultar el texto de esta página. Puedes reintentar.")
         ocrMatchCount > 0 ->
-            "Hay coincidencias en el texto, pero no se han localizado sobre la imagen. El texto y sus posiciones pueden diferir."
-        altoStatus == AltoStatus.EMPTY -> "Esta página no tiene palabras con posiciones disponibles."
-        else -> "No se encontró esa expresión en esta página. Prueba otra palabra o revisa el texto."
+            tr("Hai coincidencias no texto, pero non se localizaron sobre a imaxe. O texto e as súas posicións poden diferir.", "Hay coincidencias en el texto, pero no se han localizado sobre la imagen. El texto y sus posiciones pueden diferir.")
+        altoStatus == AltoStatus.EMPTY -> tr("Esta páxina non ten palabras con posicións dispoñibles.", "Esta página no tiene palabras con posiciones disponibles.")
+        otherMatchPages -> tr("Toca unha páxina ou usa as frechas.", "Toca una página o usa las flechas.")
+        else -> tr("Non se atopou esa expresión nesta páxina. Proba outra palabra ou revisa o texto.", "No se encontró esa expresión en esta página. Prueba otra palabra o revisa el texto.")
     }
 
     BackHandler(enabled = searchExpanded && showChrome) {
@@ -402,8 +518,8 @@ fun ViewerScreen(
         searchExpanded = false
     }
     val publicationTitle = storeBar.workTitle(path) ?: doc?.title.orEmpty()
-    fun toggleFavorite() {
-        val lines = if (ocrPosition != currentPos || ocr.startsWith("Cargando") || ocr.startsWith("No se")) emptyList()
+    fun toggleFavorite(openFolders: Boolean = true) {
+        val lines = if (ocrPosition != currentPos || ocr.isBlank()) emptyList()
         else {
             val all = ocr.lineSequence().map { it.trim() }.filter { it.length > 18 }.toList()
             if (committedQuery.isBlank()) all.take(3)
@@ -420,26 +536,46 @@ fun ViewerScreen(
             ),
             useOpenedResult = true,
         )
-        if (adding && fav) {
+        if (adding && fav && openFolders) scope.launch {
+            // Saving is one act; filing stays one tap away instead of interrupting.
             showPageActions = false
-            pickFolder = true
+            snackbar.currentSnackbarData?.dismiss()
+            val organize = snackbar.showSnackbar(tr("Páxina gardada", "Página guardada"), actionLabel = "Organizar",
+                duration = SnackbarDuration.Short)
+            if (organize == SnackbarResult.ActionPerformed) pickFolder = true
+        }
+        if (!adding && !fav) scope.launch {
+            // Removal is one tap, so it stays reversible: the page comes back with its
+            // excerpt, folders and Nota de referencia.
+            snackbar.currentSnackbarData?.dismiss()
+            val undo = snackbar.showSnackbar(tr("Páxina quitada de Gardados", "Página quitada de Guardados"), actionLabel = tr("Desfacer", "Deshacer"),
+                duration = SnackbarDuration.Long)
+            if (undo == SnackbarResult.ActionPerformed && !storeBar.isFav(path, currentPos)) toggleFavorite(openFolders = false)
         }
     }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        // The page bar already clears the system buttons; without it the snackbar must.
+        snackbarHost = { SnackbarHost(snackbar, if (showChrome && !searchExpanded) Modifier
+            else Modifier.windowInsetsPadding(WindowInsets.navigationBars)) },
         topBar = {
             if (showChrome) TopAppBar(
                 title = {
-                    Column {
+                    // The bar has a fixed height; two lines at 200 % would clip the page line.
+                    gal.galiciana.app.ui.CappedFontScale { Column {
                         Text(publicationTitle.ifBlank { "Documento" },
                             style = MaterialTheme.typography.titleMedium,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (pageCount > 0) "Página $currentPos de $pageCount" else "Página $currentPos",
+                        Text(listOfNotNull(
+                                if (pageCount > 0) tr("Páxina $currentPos de $pageCount", "Página $currentPos de $pageCount") else tr("Páxina $currentPos", "Página $currentPos"),
+                                if (fav && hasNote) tr("Gardada con nota", "Guardada con nota") else if (fav) tr("Gardada", "Guardada") else null,
+                            ).joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    } }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -447,11 +583,12 @@ fun ViewerScreen(
                     }
                 },
                 actions = {
+                    gal.galiciana.app.ui.VieiraButton(selected = fav, size = 24.dp, onClick = { toggleFavorite() })
                     IconButton(onClick = { searchExpanded = !searchExpanded }) {
-                        Icon(Icons.Filled.Search, if (searchExpanded) "Plegar búsqueda en la página" else "Buscar en la página")
+                        Icon(Icons.Filled.Search, if (searchExpanded) tr("Pregar a busca", "Plegar la búsqueda") else tr("Buscar no documento", "Buscar en el documento"))
                     }
                     IconButton(onClick = { showPageActions = true }) {
-                        Icon(Icons.Filled.MoreVert, "Acciones de esta página")
+                        Icon(Icons.Filled.MoreVert, tr("Accións desta páxina", "Acciones de esta página"))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -468,24 +605,36 @@ fun ViewerScreen(
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null)
                         Text("Anterior")
                     }
-                    Text(if (pageCount > 0) "$currentPos / $pageCount" else "$currentPos / …",
-                        style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.semantics { contentDescription = "Página $currentPos de ${if (pageCount > 0) pageCount.toString() else "total pendiente"}" })
+                    TextButton(onClick = { goToText = ""; goToPage = true }, enabled = pageCount > 1,
+                        modifier = Modifier.semantics {
+                            contentDescription = tr("Páxina $currentPos de ${if (pageCount > 0) pageCount.toString() else "total pendente"}", "Página $currentPos de ${if (pageCount > 0) pageCount.toString() else "total pendiente"}")
+                        }, colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            disabledContentColor = MaterialTheme.colorScheme.onSurface)) {
+                        Text(if (pageCount > 0) "$currentPos / $pageCount" else "$currentPos / …",
+                            style = MaterialTheme.typography.labelLarge)
+                    }
                     TextButton(onClick = { if (currentPos < pageCount) currentPos++ },
                         modifier = Modifier.weight(1f), enabled = !loading && pageCount > 0 && currentPos < pageCount) {
-                        Text("Siguiente")
+                        Text(tr("Seguinte", "Siguiente"))
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
                     }
                 }
             }
         },
     ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().imePadding()) {
+        Column(Modifier.padding(padding).fillMaxSize()
+            .windowInsetsPadding(WindowInsets.navigationBars.only(
+                if (showChrome && searchExpanded) WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
+                else WindowInsetsSides.Horizontal))
+            .imePadding()) {
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             error?.takeIf { imageId != null }?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(it, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { metadataRetry++ }) { Text("Reintentar") }
+                }
             }
             if (showChrome && searchExpanded) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -495,12 +644,12 @@ fun ViewerScreen(
                             value = findQuery,
                             onValueChange = { findQuery = it },
                             modifier = Modifier.weight(1f),
-                            label = { Text("Buscar en esta página") },
+                            label = { Text(tr("Buscar no documento", "Buscar en el documento")) },
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                             trailingIcon = {
                                 if (findQuery.isNotEmpty()) IconButton(onClick = { findQuery = "" }) {
-                                    Icon(Icons.Filled.Close, "Borrar texto de búsqueda")
+                                    Icon(Icons.Filled.Close, tr("Borrar o texto de busca", "Borrar texto de búsqueda"))
                                 }
                             },
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
@@ -508,7 +657,7 @@ fun ViewerScreen(
                             keyboardActions = androidx.compose.foundation.text.KeyboardActions(
                                 onSearch = { startScan(findQuery) }),
                         )
-                        FilledTonalButton(onClick = { startScan(findQuery) },
+                        androidx.compose.material3.Button(onClick = { startScan(findQuery) },
                             enabled = findQuery.isNotBlank() && !finding,
                             modifier = Modifier.heightIn(min = 48.dp)) { Text("Buscar") }
                     }
@@ -520,14 +669,14 @@ fun ViewerScreen(
                         ocrMatchCount = 0
                         finding = false
                         searchExpanded = false
-                    }) { Text("Quitar búsqueda y marcas") }
+                    }) { Text(tr("Quitar busca e marcas", "Quitar búsqueda y marcas")) }
                 }
             }
             if (showChrome && !searchExpanded && committedQuery.isNotBlank()) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 16.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f).heightIn(min = 48.dp).clickable(role = Role.Button,
-                        onClickLabel = "Editar búsqueda", onClick = { searchExpanded = true })
+                        onClickLabel = tr("Editar busca", "Editar búsqueda"), onClick = { searchExpanded = true })
                         .padding(vertical = 6.dp)) {
                         Text(committedQuery, style = MaterialTheme.typography.bodyMedium,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -535,20 +684,30 @@ fun ViewerScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                     }
-                    if (altoMatches.isNotEmpty()) {
+                    if (altoMatches.isNotEmpty() || otherMatchPages) {
                         IconButton(onClick = { goPrevHit() }, enabled = !locating) {
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Coincidencia anterior")
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, tr("Coincidencia anterior", "Coincidencia anterior"))
                         }
                         IconButton(onClick = { goNextHit() }, enabled = !locating) {
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Siguiente coincidencia")
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, tr("Seguinte coincidencia", "Siguiente coincidencia"))
                         }
                     } else if (!finding && (altoStatus == AltoStatus.UNAVAILABLE || ocrFailed)) {
                         TextButton(onClick = { startScan(committedQuery) }) { Text("Reintentar") }
                     }
                     IconButton(onClick = { searchExpanded = !searchExpanded }) {
-                        Icon(Icons.Filled.Edit, "Editar búsqueda en la página")
+                        Icon(Icons.Filled.Edit, tr("Editar a busca", "Editar la búsqueda"))
                     }
                 }
+                if (pagesToCheck > 0) MatchPagesRow(
+                    pages = matchPages,
+                    current = currentPos,
+                    checked = pagesChecked,
+                    toCheck = pagesToCheck,
+                    failed = pagesFailed,
+                    pageCount = pageCount,
+                    onOpen = { currentPos = it },
+                    onRetry = { searchRequest++ },
+                )
                 searchStatus?.let { message ->
                     Text(message, style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -562,10 +721,10 @@ fun ViewerScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     if (loading) androidx.compose.material3.CircularProgressIndicator()
                     else {
-                        Text("No se pudo obtener la imagen de esta página.",
+                        Text(tr("Non se puido obter a imaxe desta páxina.", "No se pudo obtener la imagen de esta página."),
                             style = MaterialTheme.typography.bodyLarge,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        Text("Comprueba la conexión y vuelve a intentarlo.",
+                        Text(tr("Comproba a conexión e téntao de novo.", "Comprueba la conexión y vuelve a intentarlo."),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         OutlinedButton(onClick = { metadataRetry++ }) { Text("Reintentar") }
@@ -578,12 +737,13 @@ fun ViewerScreen(
                     showHighlights = showHighlights,
                     onToggleChrome = { showChrome = !showChrome },
                     onHideChrome = { showChrome = false },
+                    onSwipePage = { step -> (currentPos + step).takeIf { it in 1..pageCount }?.let { currentPos = it } },
                 )
                 if (!showChrome) Box(Modifier.align(Alignment.TopEnd)
                     .windowInsetsPadding(WindowInsets.statusBars).padding(12.dp)) {
                     IconButton(onClick = { showChrome = true }, modifier = Modifier
                         .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))) {
-                        Icon(Icons.Filled.MoreVert, "Mostrar controles de lectura")
+                        Icon(Icons.Filled.FullscreenExit, tr("Mostrar controis de lectura", "Mostrar controles de lectura"))
                     }
                 }
             }
@@ -592,17 +752,18 @@ fun ViewerScreen(
     if (showPageActions) {
         val pageActionBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         ModalBottomSheet(onDismissRequest = { showPageActions = false },
+            modifier = Modifier.statusBarsPadding(),
             sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxWidth()
                 .padding(bottom = pageActionBottomInset).clipToBounds()
                 .verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
-                Text("Página $currentPos", style = MaterialTheme.typography.headlineSmall)
+                Text(tr("Páxina $currentPos", "Página $currentPos"), style = MaterialTheme.typography.headlineSmall)
                 Text(publicationTitle.ifBlank { "Documento" },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 20.dp))
-                Text("Guardar y organizar", style = MaterialTheme.typography.titleSmall,
+                Text(tr("Gardar e organizar", "Guardar y organizar"), style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)
                     .clickable(role = Role.Button, onClick = { toggleFavorite() }),
@@ -610,8 +771,8 @@ fun ViewerScreen(
                     VieiraButton(selected = fav, size = 24.dp, onClick = { toggleFavorite() },
                         modifier = Modifier.clearAndSetSemantics { })
                     Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                        Text(if (fav) "Página guardada" else "Guardar página", style = MaterialTheme.typography.bodyLarge)
-                        Text(if (fav) "Toca para quitarla de favoritos" else "Añadir a tu archivo de favoritos",
+                        Text(if (fav) tr("Páxina gardada", "Página guardada") else tr("Gardar páxina", "Guardar página"), style = MaterialTheme.typography.bodyLarge)
+                        Text(if (fav) tr("Toca para quitala de Gardados", "Toca para quitarla de Guardados") else tr("Engadir a Gardados", "Añadir a Guardados"),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -619,50 +780,55 @@ fun ViewerScreen(
                     hit = gal.galiciana.app.domain.OcrHit(title = publicationTitle, path = path,
                         imageId = imageId, position = currentPos, savedQuery = committedQuery),
                     isFav = fav, size = 24.dp, label = "Nota de referencia",
-                    onChanged = { fav = storeBar.isFav(path, currentPos) })
-                ViewerActionRow(Icons.Outlined.Folder, "Organizar en carpetas",
-                    if (inFolders) "Esta página ya está en tu archivo" else "Elige dónde guardar esta página",
+                    onChanged = { fav = storeBar.isFav(path, currentPos); noteTick++ },
+                    // Leaving the editor returns to the page being read, not to this sheet.
+                    onEditorClosed = { showPageActions = false })
+                ViewerActionRow(Icons.Outlined.Folder, tr("Organizar en cartafoles", "Organizar en carpetas"),
+                    if (inFolders) tr("Esta páxina xa está nos teus cartafoles", "Esta página ya está en tus carpetas") else tr("Elixe onde gardar esta páxina", "Elige dónde guardar esta página"),
                     onClick = {
-                        if (!fav) toggleFavorite()
+                        // Opening the sheet changes nothing; the page is saved only on "Listo".
                         showPageActions = false
                         pickFolder = true
                     })
-                ViewerActionRow(Icons.Filled.Download, "Descargar página", "JPEG original o PDF", onClick = {
+                ViewerActionRow(Icons.Filled.Download, tr("Descargar páxina", "Descargar página"), tr("JPEG orixinal ou PDF", "JPEG original o PDF"), onClick = {
                     showPageActions = false
                     chooseDownloadFormat = true
                 })
                 HorizontalDivider(Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 Text("Lectura", style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                ViewerActionRow(Icons.Filled.TextSnippet, "Leer y copiar texto", "Texto reconocido de esta página", onClick = {
+                ViewerActionRow(Icons.Filled.TextSnippet, tr("Ler e copiar texto", "Leer y copiar texto"), tr("Texto recoñecido desta páxina", "Texto reconocido de esta página"), onClick = {
                     showPageActions = false
                     showOcr = true
                 })
                 if (altoMatches.isNotEmpty()) ViewerActionRow(
                     if (showHighlights) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
                     if (showHighlights) "Ocultar marcas" else "Mostrar marcas",
-                    "Conserva la búsqueda mientras lees el original", onClick = {
+                    tr("Conserva a busca mentres les o orixinal", "Conserva la búsqueda mientras lees el original"), onClick = {
                         showHighlights = !showHighlights
                         showPageActions = false
                     })
-                ViewerActionRow(Icons.Filled.Info, "Datos de la publicación",
-                    if (showBibliography) "Ocultar información" else "Título, página y fuente", onClick = {
+                ViewerActionRow(Icons.Filled.Info, tr("Datos da publicación", "Datos de la publicación"),
+                    if (showBibliography) "Ocultar información" else tr("Título, páxina e fonte", "Título, página y fuente"), onClick = {
                         showBibliography = !showBibliography
                     })
                 if (showBibliography) SelectionContainer {
                     Column(Modifier.fillMaxWidth().padding(start = 56.dp, bottom = 16.dp)) {
-                        Text(publicationTitle.ifBlank { "Título no disponible" }, style = MaterialTheme.typography.bodyMedium)
-                        Text("Página $currentPos${page?.label?.let { " · $it" }.orEmpty()}",
+                        Text(publicationTitle.ifBlank { tr("Título non dispoñible", "Título no disponible") }, style = MaterialTheme.typography.bodyMedium)
+                        // The METS label repeats the page number when the source has no real one.
+                        val sourceLabel = page?.label?.takeUnless { Regex("""^P[áa][gx]\.?\s*\d+$""").matches(it.trim()) }
+                        Text(tr("Páxina $currentPos${sourceLabel?.let { " · $it" }.orEmpty()}", "Página $currentPos${sourceLabel?.let { " · $it" }.orEmpty()}"),
                             style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
-                        Text("Fuente: Galiciana · Biblioteca Dixital de Galicia",
+                        Text(tr("Fonte: Galiciana · Biblioteca Dixital de Galicia", "Fuente: Galiciana · Biblioteca Dixital de Galicia"),
                             style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
-                TextButton(onClick = {
-                    ctxBar.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse(GalicianaUrls.viewer(path, currentPos))))
-                }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Abrir original en Galiciana") }
-                ViewerActionRow(Icons.Filled.Home, "Volver al inicio", onClick = {
+                ViewerActionRow(Icons.AutoMirrored.Filled.OpenInNew, tr("Abrir orixinal en Galiciana", "Abrir original en Galiciana"),
+                    tr("Ábrese no navegador", "Se abre en el navegador"), onClick = {
+                        ctxBar.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(GalicianaUrls.viewer(path, currentPos))))
+                    })
+                ViewerActionRow(Icons.Filled.Home, tr("Volver ao inicio", "Volver al inicio"), onClick = {
                     showPageActions = false
                     onHome()
                 })
@@ -675,24 +841,24 @@ fun ViewerScreen(
             Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Texto de la página $currentPos", style = MaterialTheme.typography.titleLarge)
+                        Text(tr("Texto da páxina $currentPos", "Texto de la página $currentPos"), style = MaterialTheme.typography.titleLarge)
                         Text(publicationTitle.ifBlank { "Documento" }, maxLines = 2, overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    IconButton(onClick = { showOcr = false }) { Icon(Icons.Filled.Close, "Cerrar texto") }
+                    IconButton(onClick = { showOcr = false }) { Icon(Icons.Filled.Close, tr("Pechar texto", "Cerrar texto")) }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 when {
                     readerLoading -> {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text("Cargando texto…", modifier = Modifier.padding(top = 12.dp))
+                        Text(tr("Cargando o texto…", "Cargando texto…"), modifier = Modifier.padding(top = 12.dp))
                     }
                     readerError != null -> {
                         Text(readerError.orEmpty(), style = MaterialTheme.typography.bodyMedium)
                         TextButton(onClick = { readerRetry++ }) { Text("Reintentar") }
                     }
                     else -> SelectionContainer(Modifier.weight(1f)) {
-                        Text(readerText.ifBlank { "Esta página no tiene texto reconocido disponible." },
+                        Text(readerText.ifBlank { tr("Esta páxina non ten texto recoñecido dispoñible.", "Esta página no tiene texto reconocido disponible.") },
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
                     }
@@ -706,6 +872,7 @@ fun ViewerScreen(
             path = path,
             position = currentPos,
             onDismiss = { pickFolder = false },
+            onConfirmed = { if (!fav) toggleFavorite(openFolders = false) },
         )
     }
 }
@@ -747,10 +914,12 @@ private fun ZoomablePage(
     showHighlights: Boolean = true,
     onToggleChrome: () -> Unit = {},
     onHideChrome: () -> Unit = {},
+    onSwipePage: (Int) -> Unit = {},
 ) {
+    val swipeHandler = androidx.compose.runtime.rememberUpdatedState(onSwipePage)
     if (imageUrl == null) {
         Text(
-            "Este METS no trajo idImagen.\n$fallback",
+            tr("Galiciana non indica a imaxe dixitalizada desta páxina. Podes consultala na súa web:\n$fallback", "Galiciana no indica la imagen digitalizada de esta página. Puedes consultarla en su web:\n$fallback"),
             modifier = Modifier.padding(16.dp)
         )
         return
@@ -788,6 +957,50 @@ private fun ZoomablePage(
         offsetY = 0f
     }
 
+    // Turning a page: a screen-sized copy of the old page slides out toward the gesture while
+    // the new one slides in from the other side once its image is ready. The copy, never the
+    // full page, is kept, and only for the 200 ms of the exit. Off when the system says not
+    // to animate; then the page simply changes.
+    val motionContext = LocalContext.current
+    val reduceMotion = remember { gal.galiciana.app.ui.theme.motionReduced(motionContext) }
+    val enter = remember { androidx.compose.animation.core.Animatable(0f) }
+    var shownPosition by remember { mutableIntStateOf(position) }
+    var pendingDirection by remember { mutableIntStateOf(0) }
+    // The page on show. While reading it is the same object as pageBmp, so it costs nothing;
+    // on a turn it outlives pageBmp just long enough to make the small exit copy.
+    var shownBmp by remember { mutableStateOf<ImageBitmap?>(null) }
+    var exitCopy by remember { mutableStateOf<ImageBitmap?>(null) }
+    var exitDirection by remember { mutableIntStateOf(0) }
+    val exit = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(position) {
+        if (position != shownPosition) {
+            val direction = if (position > shownPosition) 1 else -1
+            pendingDirection = direction
+            shownPosition = position
+            val outgoing = shownBmp
+            shownBmp = null
+            val copy = if (reduceMotion || outgoing == null || box.width == 0 || box.height == 0) null
+                else withContext(Dispatchers.Default) {
+                    val source = outgoing.asAndroidBitmap()
+                    val fit = min(box.width.toFloat() / source.width, box.height.toFloat() / source.height).coerceAtMost(1f)
+                    android.graphics.Bitmap.createScaledBitmap(source,
+                        (source.width * fit).roundToInt().coerceAtLeast(1),
+                        (source.height * fit).roundToInt().coerceAtLeast(1), true).asImageBitmap()
+                }
+            if (copy != null) {
+                exitCopy = copy
+                exitDirection = direction
+                try {
+                    exit.snapTo(0f)
+                    exit.animateTo(1f, androidx.compose.animation.core.tween(200,
+                        easing = androidx.compose.animation.core.FastOutLinearInEasing))
+                } finally { exitCopy = null }
+            }
+        }
+    }
+
+    val pageContext = LocalContext.current
+    val budget = remember { pageBudget(pageContext) }
     var pageFail by remember(imageUrl) { mutableStateOf(false) }
     var preview by remember(imageUrl) { mutableStateOf(false) }
     var imageError by remember(imageUrl) { mutableStateOf<String?>(null) }
@@ -799,7 +1012,7 @@ private fun ZoomablePage(
         val result = withContext(Dispatchers.IO) {
             runCatching {
                 val page = fetchGalicianaPage(imageUrl, path, position, imageId.orEmpty())
-                val bitmap = decodeGalicianaPage(page.bytes) ?: error("Formato de imagen no reconocido")
+                val bitmap = decodeGalicianaPage(page.bytes, budget) ?: error(UNREADABLE_PAGE)
                 bitmap.asImageBitmap() to page.preview
             }
         }
@@ -810,6 +1023,36 @@ private fun ZoomablePage(
             imageError = it.message
             pageFail = true
         }
+    }
+
+    LaunchedEffect(pageBmp) { pageBmp?.let { shownBmp = it } }
+    LaunchedEffect(pageBmp) {
+        val direction = pendingDirection
+        if (pageBmp == null || direction == 0) return@LaunchedEffect
+        pendingDirection = 0
+        if (reduceMotion) { enter.snapTo(0f); return@LaunchedEffect }
+        // Whatever interrupts the slide, the page ends where it belongs.
+        try {
+            enter.snapTo(direction * 0.35f)
+            enter.animateTo(0f, androidx.compose.animation.core.tween(200,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing))
+        } finally { enter.snapTo(0f) }
+    }
+
+    // Locator: the page never zooms on its own, so the active match announces itself
+    // with an amber halo that pulses a few times when the matches arrive or the reader
+    // moves to another one, then stays as a faint ring while the page is seen whole.
+    val locatorPulse = remember { androidx.compose.animation.core.Animatable(1f) }
+    val activeKey = matches.getOrNull(currentMatch)?.boxes?.firstOrNull()
+    LaunchedEffect(activeKey, showHighlights) {
+        if (activeKey == null || !showHighlights || reduceMotion) { locatorPulse.snapTo(1f); return@LaunchedEffect }
+        try {
+            repeat(3) {
+                locatorPulse.snapTo(0f)
+                locatorPulse.animateTo(1f, androidx.compose.animation.core.tween(700,
+                    easing = androidx.compose.animation.core.LinearOutSlowInEasing))
+            }
+        } finally { locatorPulse.snapTo(1f) }
     }
 
     // Only explicit previous/next-match navigation may focus a match.
@@ -836,38 +1079,66 @@ private fun ZoomablePage(
             .background(Color(0xFF1C1A17))
             .onSizeChanged { box = it }
             .semantics {
-                contentDescription = "Imagen digitalizada de la página $position"
+                contentDescription = tr("Imaxe dixitalizada da páxina $position", "Imagen digitalizada de la página $position")
                 customActions = listOf(
-                    CustomAccessibilityAction("Ampliar imagen") {
+                    CustomAccessibilityAction(tr("Ampliar imaxe", "Ampliar imagen")) {
                         applyZoom(scale, scale * 1.5f, Offset(box.width / 2f, box.height / 2f), Offset.Zero)
                         true
                     },
-                    CustomAccessibilityAction("Reducir imagen") {
+                    CustomAccessibilityAction(tr("Reducir imaxe", "Reducir imagen")) {
                         applyZoom(scale, scale / 1.5f, Offset(box.width / 2f, box.height / 2f), Offset.Zero)
                         true
                     },
-                    CustomAccessibilityAction("Ver imagen completa") {
+                    CustomAccessibilityAction(tr("Ver a imaxe completa", "Ver imagen completa")) {
                         applyZoom(scale, 1f, Offset.Zero, Offset.Zero)
                         true
                     },
-                    CustomAccessibilityAction("Desplazar hacia abajo") {
+                    CustomAccessibilityAction(tr("Desprazar cara abaixo", "Desplazar hacia abajo")) {
                         applyZoom(scale, scale, Offset.Zero, Offset(0f, -box.height / 3f))
                         true
                     },
-                    CustomAccessibilityAction("Desplazar hacia arriba") {
+                    CustomAccessibilityAction(tr("Desprazar cara arriba", "Desplazar hacia arriba")) {
                         applyZoom(scale, scale, Offset.Zero, Offset(0f, box.height / 3f))
                         true
                     },
-                    CustomAccessibilityAction("Desplazar hacia la derecha") {
+                    CustomAccessibilityAction(tr("Desprazar cara á dereita", "Desplazar hacia la derecha")) {
                         applyZoom(scale, scale, Offset.Zero, Offset(-box.width / 3f, 0f))
                         true
                     },
-                    CustomAccessibilityAction("Desplazar hacia la izquierda") {
+                    CustomAccessibilityAction(tr("Desprazar cara á esquerda", "Desplazar hacia la izquierda")) {
                         applyZoom(scale, scale, Offset.Zero, Offset(box.width / 3f, 0f))
                         true
                     },
-                    CustomAccessibilityAction("Mostrar u ocultar controles de lectura") { onToggleChrome(); true },
+                    CustomAccessibilityAction(tr("Mostrar ou ocultar controis de lectura", "Mostrar u ocultar controles de lectura")) { onToggleChrome(); true },
                 )
+            }
+            .pointerInput(path, position) {
+                // A one-finger horizontal swipe on the whole page turns it. Observed without
+                // consuming, so pinch, pan and taps keep working; zoomed pages pan instead.
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false,
+                        pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    val startScale = scale
+                    val startX = offsetX
+                    var multi = false
+                    var last = down.position
+                    var dx = 0f
+                    var dy = 0f
+                    while (true) {
+                        val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        if (event.changes.count { it.pressed } > 1) multi = true
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
+                        dx += change.position.x - last.x
+                        dy += change.position.y - last.y
+                        last = change.position
+                    }
+                    // Whole page shown, or zoomed in but already at that side's edge: turn the page.
+                    val atEdge = scale > 1.02f && kotlin.math.abs(offsetX - startX) < 2f
+                    val turns = !multi && kotlin.math.abs(dx) > size.width * 0.22f && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.5f &&
+                        ((startScale <= 1.02f && scale <= 1.02f) || atEdge)
+                    if (turns) swipeHandler.value(if (dx < 0) 1 else -1)
+                }
             }
             .pointerInput(path, position) {
                 detectTransformGestures { centroid, pan, zoom, _ ->
@@ -891,13 +1162,20 @@ private fun ZoomablePage(
         when {
             pageBmp == null && !pageFail -> LinearProgressIndicator(Modifier.fillMaxWidth(0.4f))
             pageFail -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("No se pudo abrir la página", color = Color.White)
-                Text(imageError.orEmpty().take(100), color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                Text(tr("Non se puido abrir a páxina", "No se pudo abrir la página"), color = Color.White)
+                Text(if (imageError == UNREADABLE_PAGE) tr("O ficheiro recibido non é unha imaxe válida.", "El archivo recibido no es una imagen válida.")
+                    else tr("Comproba a conexión e téntao de novo.", "Comprueba la conexión y vuelve a intentarlo."),
+                    color = Color.LightGray, style = MaterialTheme.typography.bodySmall,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
                 OutlinedButton(onClick = { retry++ }) { Text("Reintentar") }
             }
             else -> {
                 val bmp = pageBmp
-                Canvas(Modifier.fillMaxSize()) {
+                Canvas(Modifier.fillMaxSize().graphicsLayer {
+                    translationX = enter.value * size.width
+                    alpha = 1f - kotlin.math.abs(enter.value) * 1.5f
+                }) {
                     if (bmp == null) return@Canvas
                     val iw = bmp.width.toFloat().coerceAtLeast(1f)
                     val ih = bmp.height.toFloat().coerceAtLeast(1f)
@@ -918,6 +1196,23 @@ private fun ZoomablePage(
                         // Draw the current occurrence last so its outline remains visible.
                         val ordered = matches.indices.filter { it != currentMatch } +
                             listOfNotNull(currentMatch.takeIf { it in matches.indices })
+                        matches.getOrNull(currentMatch)?.boxes?.firstOrNull()?.let { hit ->
+                            val cx = ox + (hit.left + hit.width / 2f) * sx
+                            val cy = oy + (hit.top + hit.height / 2f) * sy
+                            val base = maxOf(hit.width * sx, hit.height * sy) / 2f + 10.dp.toPx()
+                            val p = locatorPulse.value
+                            // The pulse widens and fades; the resting ring only matters while the page is small.
+                            if (p < 1f) drawCircle(
+                                color = Color(0xFFFFC54D).copy(alpha = 0.85f * (1f - p)),
+                                radius = base + p * 44.dp.toPx(), center = Offset(cx, cy),
+                                style = Stroke(width = 3.dp.toPx()),
+                            )
+                            if (scale < 1.6f) drawCircle(
+                                color = Color(0xFFFFC54D).copy(alpha = 0.7f),
+                                radius = base, center = Offset(cx, cy),
+                                style = Stroke(width = 2.dp.toPx()),
+                            )
+                        }
                         ordered.forEach { index ->
                             val active = index == currentMatch
                             matches[index].boxes.forEach { hit ->
@@ -946,9 +1241,21 @@ private fun ZoomablePage(
                     color = Color.White,
                     modifier = Modifier.align(Alignment.BottomCenter)
                         .background(Color(0xCC111111))
-                        .clickable { retry++ }
+                        .clickable(role = Role.Button, onClickLabel = tr("Cargar a imaxe en alta resolución", "Cargar la imagen en alta resolución")) { retry++ }
+                        .heightIn(min = 48.dp)
                         .padding(12.dp),
                 )
+            }
+        }
+        exitCopy?.let { copy ->
+            Canvas(Modifier.fillMaxSize().graphicsLayer {
+                translationX = -exitDirection * exit.value * size.width
+                alpha = 1f - exit.value
+            }) {
+                val w = copy.width.toFloat()
+                val h = copy.height.toFloat()
+                drawImage(copy, dstOffset = IntOffset(((size.width - w) / 2f).roundToInt(), ((size.height - h) / 2f).roundToInt()),
+                    dstSize = IntSize(w.roundToInt(), h.roundToInt()), filterQuality = FilterQuality.Low)
             }
         }
     }
@@ -972,21 +1279,21 @@ private suspend fun fetchGalicianaPage(
             .build()
         return Http.client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("HTTP ${response.code}")
-            val body = response.body ?: error("Respuesta sin imagen")
+            val body = response.body ?: error(tr("Resposta sen imaxe", "Respuesta sin imagen"))
             val input = body.byteStream()
             val output = java.io.ByteArrayOutputStream()
             val buffer = ByteArray(8192)
             while (true) {
                 val n = input.read(buffer)
                 if (n < 0) break
-                if (output.size() + n > 32 * 1024 * 1024) error("Imagen mayor de 32 MB")
+                if (output.size() + n > 32 * 1024 * 1024) error(tr("Imaxe maior de 32 MB", "Imagen mayor de 32 MB"))
                 output.write(buffer, 0, n)
             }
             output.toByteArray().also { bytes ->
                 if (bytes.size < 100 ||
                     !((bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte()) ||
                       (bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte()))) {
-                    error("El servidor devolvió contenido que no es una imagen")
+                    error(tr("O servidor devolveu contido que non é unha imaxe", "El servidor devolvió contenido que no es una imagen"))
                 }
             }
         }
@@ -1019,17 +1326,41 @@ private suspend fun fetchGalicianaPage(
             catch (e: Exception) { last = e }
         }
     }
-    error(last?.message ?: "Imagen no disponible")
+    error(last?.message ?: tr("Imaxe non dispoñible", "Imagen no disponible"))
 }
 
-private fun decodeGalicianaPage(bytes: ByteArray): android.graphics.Bitmap? {
+private const val UNREADABLE_PAGE = "Formato de imagen no reconocido"
+
+/** How large a decoded page may be on this device. */
+internal data class PageBudget(val longSide: Int, val pixels: Double)
+
+/**
+ * Phones with 6 GB or more keep the full 7000 px page for legible zoom. Smaller or
+ * low-RAM devices get a lighter page so the system does not close the app mid-reading.
+ */
+internal fun pageBudget(totalRamBytes: Long, lowRam: Boolean): PageBudget = when {
+    lowRam || totalRamBytes < 3_500_000_000L -> PageBudget(4000, 8_000_000.0)
+    totalRamBytes < 5_500_000_000L -> PageBudget(5200, 13_000_000.0)
+    else -> PageBudget(7000, 22_000_000.0)
+}
+
+private fun pageBudget(context: android.content.Context): PageBudget {
+    val manager = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+    val info = android.app.ActivityManager.MemoryInfo().also(manager::getMemoryInfo)
+    return pageBudget(info.totalMem, manager.isLowRamDevice)
+}
+
+private fun decodeGalicianaPage(bytes: ByteArray, budget: PageBudget): android.graphics.Bitmap? {
     if (bytes.size < 100) return null
     val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
     android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-    // Keep the long side near 7000 px for legible zoom, within a roughly 80 MB bitmap.
+    // Keep the long side within the device budget (7000 px on capable phones for legible
+    // zoom), never above ~88 MB of ARGB pixels: Android refuses to draw bitmaps over
+    // 100 MB and the app would close.
     val longSide = maxOf(bounds.outWidth, bounds.outHeight)
-    val ratio = minOf(1.0, 7000.0 / longSide)
+    val pixels = bounds.outWidth.toDouble() * bounds.outHeight
+    val ratio = minOf(1.0, budget.longSide.toDouble() / longSide, kotlin.math.sqrt(budget.pixels / pixels))
     if (android.os.Build.VERSION.SDK_INT >= 28) {
         try {
             return android.graphics.ImageDecoder.decodeBitmap(
@@ -1047,7 +1378,7 @@ private fun decodeGalicianaPage(bytes: ByteArray): android.graphics.Bitmap? {
         }
     }
     var sample = 1
-    while (longSide / sample > 7000) sample *= 2
+    while (longSide / sample > budget.longSide || pixels / (sample.toDouble() * sample) > budget.pixels) sample *= 2
     val options = android.graphics.BitmapFactory.Options().apply {
         inSampleSize = sample
         inPreferredConfig = android.graphics.Bitmap.Config.RGB_565

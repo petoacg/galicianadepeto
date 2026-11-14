@@ -1,5 +1,6 @@
 package gal.galiciana.app.ui
 
+import gal.galiciana.app.i18n.tr
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,19 +22,19 @@ fun PublicationYearSelector(years: List<String>, selected: String?, enabled: Boo
         modifier = Modifier.heightIn(min = 48.dp)) {
         Icon(Icons.Outlined.CalendarMonth, null)
         Spacer(Modifier.width(8.dp))
-        Text("Año ${selected ?: "…"} · Cambiar")
+        Text(tr("Ano ${selected ?: "…"} · Cambiar", "Año ${selected ?: "…"} · Cambiar"))
     }
     if (choosing) ModalBottomSheet(onDismissRequest = { choosing = false },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
-            Text("Elegir año", style = MaterialTheme.typography.headlineSmall)
-            ClearableField(filter, { filter = it }, "Escribe un año", modifier = Modifier.padding(vertical = 16.dp),
+            Text(tr("Elixir ano", "Elegir año"), style = MaterialTheme.typography.headlineSmall)
+            ClearableField(filter, { filter = it }, tr("Escribe un ano", "Escribe un año"), modifier = Modifier.padding(vertical = 16.dp),
                 imeSearch = false, keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
             LazyColumn(Modifier.heightIn(max = 440.dp)) {
                 items(years.filter { it.contains(filter.trim()) }) { year ->
                     ListItem(headlineContent = { Text(year) },
                         trailingContent = { if (selected == year) Text("Seleccionado", color = MaterialTheme.colorScheme.primary) },
-                        modifier = Modifier.clickable { choosing = false; onSelect(year) })
+                        modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { choosing = false; onSelect(year) })
                 }
             }
         }

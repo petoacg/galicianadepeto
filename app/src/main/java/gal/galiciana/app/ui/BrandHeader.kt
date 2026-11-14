@@ -1,5 +1,6 @@
 package gal.galiciana.app.ui
 
+import gal.galiciana.app.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -44,14 +45,31 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import gal.galiciana.app.ui.theme.GalicianaBlue
-import gal.galiciana.app.ui.theme.GalicianaBlueDark
 
-val SectionConsulta = Color(0xFF0B6EBD)
-val SectionSucesos = Color(0xFF8B2A36)
-val SectionHemeroteca = Color(0xFF0B4F86)
-val SectionColecciones = Color(0xFF1B6B4A)
-val SectionDatos = Color(0xFF3D4A5C)
+/**
+ * The one header of the three tab roots (Buscar, Explorar, Gardados): the vieira as the
+ * app's mark, then the destination's name, then its actions. Same height, margin and
+ * type everywhere, so switching tabs changes the words, not the furniture.
+ */
+@Composable
+fun TabRootBar(
+    title: String,
+    actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
+) {
+    Surface(color = MaterialTheme.colorScheme.surface) {
+        Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)
+            .heightIn(min = 64.dp).padding(start = 8.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            // 48dp box with a 24dp mark: the shell's edge lines up with the 20dp content margin.
+            VieiraButton(selected = true, forcedCeleste = true, onClick = {}, size = 24.dp, interactive = false)
+            CappedFontScale {
+                Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(start = 4.dp, end = 8.dp).semantics { heading() })
+            }
+            actions()
+        }
+    }
+}
 
 @Composable
 fun SectionBar(
@@ -59,7 +77,14 @@ fun SectionBar(
     color: Color,
     onBack: () -> Unit,
     onHome: () -> Unit,
+    showBack: Boolean = true,
+    actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
 ) {
+    if (!showBack) {
+        // A tab's own screen is a destination, not a step: the shared root header.
+        TabRootBar(title, actions)
+        return
+    }
     Surface(color = MaterialTheme.colorScheme.surface) {
         Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)
             .heightIn(min = 56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -69,35 +94,8 @@ fun SectionBar(
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { heading() })
+            actions()
         }
-    }
-}
-
-@Composable
-fun GalicianaMark(
-    onClick: () -> Unit = {},
-    size: androidx.compose.ui.unit.Dp = 36.dp,
-    onBar: Boolean = true,
-    barColor: Color = GalicianaBlue,
-) {
-    Box(
-        modifier = Modifier
-            .size(maxOf(48.dp, size))
-            .semantics { contentDescription = "Inicio" }
-            .clip(RoundedCornerShape(4.dp))
-            .background(barColor)
-            .border(1.dp, Color.White, RoundedCornerShape(4.dp))
-            .clickable(role = Role.Button, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            "G",
-            modifier = Modifier.clearAndSetSemantics { },
-            color = Color.White,
-            fontWeight = FontWeight.Black,
-            fontSize = (size.value * 0.52f).sp,
-            letterSpacing = (-0.5).sp,
-        )
     }
 }
 
@@ -111,38 +109,15 @@ fun BrandHeader(
     onFavoritos: () -> Unit = {},
     compact: Boolean = false,
     onAbout: (() -> Unit)? = null,
+    homeAction: Boolean = true,
 ) {
-    Surface(color = MaterialTheme.colorScheme.surface) {
-        Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)
-            .heightIn(min = 64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            VieiraButton(selected = true, forcedCeleste = true, onClick = onHome, size = 28.dp, contentLabel = "Inicio")
-            Column(Modifier.weight(1f)) {
-                Text(androidx.compose.ui.res.stringResource(gal.galiciana.app.R.string.app_name), style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                if (!compact) Text(current, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            onAbout?.let { action ->
-                IconButton(onClick = action) {
-                    Icon(androidx.compose.material.icons.Icons.Outlined.Info, "Acerca de y aviso legal",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+    TabRootBar(androidx.compose.ui.res.stringResource(gal.galiciana.app.R.string.app_name)) {
+        onAbout?.let { action ->
+            IconButton(onClick = action) {
+                Icon(androidx.compose.material.icons.Icons.Outlined.Info, tr("Acerca de e aviso legal", "Acerca de y aviso legal"),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
 }
 
-@Composable
-private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Text(
-        label,
-        color = Color.White.copy(alpha = if (selected) 1f else 0.88f),
-        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-        fontSize = 12.sp,
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = modifier.heightIn(min = 48.dp).semantics { this.selected = selected }.clickable(role = Role.Tab, onClick = onClick)
-    )
-}

@@ -1,5 +1,7 @@
 package gal.galiciana.app.ui.home
 
+import gal.galiciana.app.i18n.tr
+import gal.galiciana.app.ui.liveStatus
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,7 +39,7 @@ fun FeaturedScreen(recordId: String, onBack: () -> Unit, onHome: () -> Unit,
     var detailsExpanded by rememberSaveable(recordId) { mutableStateOf(false) }
     val title = seedTitle.ifBlank {
         detail?.metadata?.firstOrNull { it.label.equals("Título", true) || it.label.equals("Titulo", true) }?.value
-            ?: "Ficha de la publicación"
+            ?: tr("Ficha da publicación", "Ficha de la publicación")
     }
     fun open(path: String, issue: String? = null) {
         store.rememberWork(path, issue?.let { "$title · $it" } ?: title, title)
@@ -54,7 +56,7 @@ fun FeaturedScreen(recordId: String, onBack: () -> Unit, onHome: () -> Unit,
             }
             // A catalogue record stays a record. Opening its document is explicit.
         } catch (e: CancellationException) { throw e }
-        catch (_: Exception) { error = "No se pudo cargar esta ficha. Comprueba la conexión y reintenta." }
+        catch (_: Exception) { error = tr("Non se puido cargar esta ficha. Comproba a conexión e téntao de novo.", "No se pudo cargar esta ficha. Comprueba la conexión y reintenta.") }
         finally { loading = false }
     }
     val scope = rememberCoroutineScope()
@@ -66,36 +68,36 @@ fun FeaturedScreen(recordId: String, onBack: () -> Unit, onHome: () -> Unit,
             loading = true; error = null
             try { issues = hemeroteca.loadNumeros(id, value) }
             catch (e: CancellationException) { throw e }
-            catch (_: Exception) { error = "No se pudieron cargar los números de ese año. Vuelve a intentarlo." }
+            catch (_: Exception) { error = tr("Non se puideron cargar os números dese ano. Téntao de novo.", "No se pudieron cargar los números de ese año. Vuelve a intentarlo.") }
             finally { loading = false }
         }
     }
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0), topBar = {
-        SectionBar("Ficha de la publicación", MaterialTheme.colorScheme.primary, onBack, onHome)
+        SectionBar(tr("Ficha da publicación", "Ficha de la publicación"), MaterialTheme.colorScheme.primary, onBack, onHome)
     }) { padding ->
-        LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(24.dp)) {
+        LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp)) {
             item {
                 Text(title, style = MaterialTheme.typography.headlineSmall)
                 if (loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 16.dp))
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 12.dp))
-                    TextButton(onClick = { retry++ }) { Text("Reintentar") } }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 12.dp).liveStatus())
+                    androidx.compose.material3.OutlinedButton(onClick = { retry++ }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Reintentar") } }
                 detail?.let { CatalogueProvenance(it, Modifier.padding(vertical = 12.dp)) }
                 if (years.isNotEmpty()) PublicationYearSelector(years, year, !loading) { value ->
                     selectYear(value)
                 }
-                if (issues.isNotEmpty()) Text("${issues.size} números disponibles · ${year.orEmpty()}",
+                if (issues.isNotEmpty()) Text(tr("${issues.size} números dispoñibles · ${year.orEmpty()}", "${issues.size} números disponibles · ${year.orEmpty()}"),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 12.dp))
                 if (detail?.publicationId == null && detail?.path != null) Button(onClick = { detail?.path?.let { open(it) } },
                     modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp)) { Text("Abrir documento") }
             }
             items(issues, key = { it.path }) { number ->
-                ListItem(headlineContent = { Text(number.label) }, modifier = Modifier.clickable { open(number.path, number.label) })
+                ListItem(headlineContent = { Text(number.label) }, modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { open(number.path, number.label) })
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
             detail?.let { data -> item { CatalogueFields(data, Modifier.padding(vertical = 20.dp)) } }
             if (!loading && error == null && detail?.path == null && issues.isEmpty()) item {
-                Text("Esta ficha no ofrece una copia digital consultable desde la app.", modifier = Modifier.padding(vertical = 20.dp))
+                Text(tr("Esta ficha non ofrece unha copia dixital consultable desde a app.", "Esta ficha no ofrece una copia digital consultable desde la app."), modifier = Modifier.padding(vertical = 20.dp))
             }
         }
     }

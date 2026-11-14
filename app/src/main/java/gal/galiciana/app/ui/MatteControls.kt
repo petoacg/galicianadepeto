@@ -1,5 +1,7 @@
 package gal.galiciana.app.ui
 
+import androidx.compose.material.icons.filled.Search
+import gal.galiciana.app.i18n.tr
 import androidx.compose.material3.MaterialTheme
 
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,7 +22,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
-import gal.galiciana.app.ui.theme.MatteFill
 
 val MatteShape = RoundedCornerShape(12.dp)
 val ScreenGutter = 20.dp
@@ -29,23 +30,21 @@ val CardInk: Color
     @Composable get() = MaterialTheme.colorScheme.onSurface
 val CardMute: Color
     @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
-val CardRule = Color(0xFFD7CDB8)
-val CardPaper = Color(0xFFF7F1E6)
 
 @Composable
 fun matteFieldColors() = TextFieldDefaults.colors(
     focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-    disabledContainerColor = Color(0xFFD4D8DC),
+    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
     focusedIndicatorColor = Color.Transparent,
     unfocusedIndicatorColor = Color.Transparent,
     disabledIndicatorColor = Color.Transparent,
     cursorColor = MaterialTheme.colorScheme.primary,
     focusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
     unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    disabledLabelColor = Color(0xFF8B9298),
-    disabledTextColor = Color(0xFF8B9298),
-    disabledPlaceholderColor = Color(0xFF9AA1A7),
+    disabledLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+    disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+    disabledPlaceholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
     focusedTextColor = MaterialTheme.colorScheme.onSurface,
     unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
 )
@@ -62,6 +61,8 @@ fun ClearableField(
     imeSearch: Boolean = true,
     onSearch: (() -> Unit)? = null,
     keyboardType: KeyboardType = KeyboardType.Text,
+    /** When set, a search button appears inside the field as soon as there is text. */
+    searchLabel: String? = null,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     TextField(
@@ -81,9 +82,12 @@ fun ClearableField(
             onDone = { keyboard?.hide() },
         ),
         trailingIcon = {
-            if (value.isNotEmpty()) {
+            if (value.isNotEmpty()) androidx.compose.foundation.layout.Row {
                 IconButton(onClick = { onValueChange("") }, enabled = enabled) {
-                    Icon(Icons.Filled.Close, contentDescription = "Borrar ${label ?: placeholder}")
+                    Icon(Icons.Filled.Close, contentDescription = label?.let { "Borrar ${it.lowercase()}" } ?: tr("Borrar o texto", "Borrar el texto"))
+                }
+                if (searchLabel != null && onSearch != null) IconButton(onClick = { onSearch(); keyboard?.hide() }, enabled = enabled) {
+                    Icon(Icons.Filled.Search, contentDescription = searchLabel, tint = MaterialTheme.colorScheme.primary)
                 }
             }
         },

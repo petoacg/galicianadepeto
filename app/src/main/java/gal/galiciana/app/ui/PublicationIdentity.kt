@@ -21,7 +21,7 @@ fun publicationIdentity(title: String, parentTitle: String? = null): Publication
     val descriptor = Regex("\\s*:\\s*(?:rotativo|diario|semanario|periódico|revista|boletín)\\b.*", RegexOption.IGNORE_CASE)
     val issueSuffix = Regex("\\s*[:·-]?\\s*(?:A[nñ]o\\s+[IVXLCDM\\d]+|N[uú]mero\\s+\\d|N[uú]m\\.?\\s+\\d).*$", RegexOption.IGNORE_CASE)
     fun shorten(value: String) = value.replace(descriptor, "").replace(issueSuffix, "").trim().trimEnd(':', '·', '-').trim()
-    val short = shorten(full).takeUnless { it.isBlank() || it.matches(Regex("(?i)(?:p[áa]gina|documento)\\s*\\d*")) }
+    val short = shorten(full).takeUnless { it.isBlank() || it.matches(Regex("(?i)(?:p[áa](?:g|x)ina|documento)\\s*\\d*")) }
         ?: parentTitle?.trim()?.let(::shorten)?.takeIf { it.isNotBlank() } ?: full
     return PublicationIdentity(full, short, date, issue)
 }

@@ -8,7 +8,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import java.text.Normalizer
 
-val HighlightYellow = Color(0x66FFEB3B)
 val HighlightInk = Color(0xFF1A1A1A)
 
 private val QuoteMarks = charArrayOf('"', '“', '”', '«', '»', '„', '‟', '\'', '‘', '’')

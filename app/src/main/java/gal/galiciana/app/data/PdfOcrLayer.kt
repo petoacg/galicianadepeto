@@ -1,5 +1,6 @@
 package gal.galiciana.app.data
 
+import gal.galiciana.app.i18n.tr
 import java.nio.charset.Charset
 import java.util.Locale
 
@@ -8,10 +9,10 @@ internal data class PdfOcrLine(val text: String, val x: Double, val baseline: Do
 
 internal fun layoutPdfOcr(text: String, width: Int, height: Int): List<PdfOcrLine> {
     require(width > 0 && height > 0)
-    require(text.length <= 2 * 1024 * 1024) { "El OCR es demasiado extenso para incluirlo completo en este PDF." }
+    require(text.length <= 2 * 1024 * 1024) { tr("O OCR é demasiado extenso para incluílo completo neste PDF.", "El OCR es demasiado extenso para incluirlo completo en este PDF.") }
     val lines = text.replace('\u0000', ' ').lineSequence().flatMap { it.chunked(120).asSequence() }
         .filter { it.isNotBlank() }.toList()
-    require(lines.size <= 20000) { "El OCR contiene demasiadas líneas para incluirlo completo en este PDF." }
+    require(lines.size <= 20000) { tr("O OCR contén demasiadas liñas para incluílo completo neste PDF.", "El OCR contiene demasiadas líneas para incluirlo completo en este PDF.") }
     if (lines.isEmpty()) return emptyList()
     val padding = minOf(24.0, width * 0.02, height * 0.02)
     val availableWidth = width - padding * 2

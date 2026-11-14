@@ -1,5 +1,7 @@
 package gal.galiciana.app.ui.datos
 
+import gal.galiciana.app.i18n.tr
+import gal.galiciana.app.ui.liveStatus
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.ui.platform.LocalContext
@@ -48,7 +50,6 @@ import gal.galiciana.app.data.Http
 import gal.galiciana.app.data.OaiRepository
 import gal.galiciana.app.domain.Work
 import gal.galiciana.app.ui.SectionBar
-import gal.galiciana.app.ui.SectionDatos
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -58,6 +59,7 @@ import okhttp3.Request
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun DatosScreen(
     onHome: () -> Unit,
@@ -119,7 +121,7 @@ fun DatosScreen(
             error = null
             try { works = oai.firstPage(); recordsReady = true }
             catch (e: CancellationException) { throw e }
-            catch (_: Exception) { error = "No se pudieron cargar los registros del catálogo. Vuelve a intentarlo." }
+            catch (_: Exception) { error = tr("Non se puideron cargar os rexistros do catálogo. Téntao de novo.", "No se pudieron cargar los registros del catálogo. Vuelve a intentarlo.") }
             finally { if (generalGeneration == request) loading = false }
         }
     }
@@ -132,7 +134,7 @@ fun DatosScreen(
             loading = true; error = null
             try { works = (works + oai.nextPage()).distinctBy { it.oaiId }; recordsReady = true }
             catch (e: CancellationException) { throw e }
-            catch (_: Exception) { error = "No se pudieron cargar los registros del catálogo. Vuelve a intentarlo." }
+            catch (_: Exception) { error = tr("Non se puideron cargar os rexistros do catálogo. Téntao de novo.", "No se pudieron cargar los registros del catálogo. Vuelve a intentarlo.") }
             finally { if (generalGeneration == request) loading = false }
         }
     }
@@ -161,7 +163,7 @@ fun DatosScreen(
                         ?.takeIf { it.isNotBlank() }
                 }.distinct().joinToString("\n")
             } } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = "No se pudieron consultar los títulos del catálogo. Vuelve a intentarlo." }
+            catch (e: Exception) { error = tr("Non se puideron consultar os títulos do catálogo. Téntao de novo.", "No se pudieron consultar los títulos del catálogo. Vuelve a intentarlo.") }
             finally { if (generalGeneration == request) { loading = false; if (error == null) titlesReady = true } }
         }
     }
@@ -208,7 +210,7 @@ fun DatosScreen(
                     }
                 }
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = "No se pudo consultar este índice. Vuelve a intentarlo." }
+            catch (e: Exception) { error = tr("Non se puido consultar este índice. Téntao de novo.", "No se pudo consultar este índice. Vuelve a intentarlo.") }
             finally { if (detailGeneration == request) { loading = false; if (error == null) subjectsReady = true } }
         }
     }
@@ -247,7 +249,7 @@ fun DatosScreen(
                     }.distinctBy { it.second }
                 }
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = "No se pudieron cargar las obras relacionadas. Vuelve a intentarlo." }
+            catch (e: Exception) { error = tr("Non se puideron cargar as obras relacionadas. Téntao de novo.", "No se pudieron cargar las obras relacionadas. Vuelve a intentarlo.") }
             finally { if (detailGeneration == request) loading = false }
         }
     }
@@ -269,12 +271,12 @@ fun DatosScreen(
     }
 
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0), topBar = {
-        SectionBar(if (opened != null) "Ficha del registro" else if (selectedConcept != null) "Obras relacionadas" else "Materias y datos del catálogo",
+        SectionBar(if (opened != null) tr("Ficha do rexistro", "Ficha del registro") else if (selectedConcept != null) "Obras relacionadas" else tr("Materias e datos do catálogo", "Materias y datos del catálogo"),
             MaterialTheme.colorScheme.primary, { back() }, onHome)
     }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().imePadding()) {
-            if (opened == null && selectedConcept == null) Column(Modifier.padding(horizontal = 24.dp, vertical = 12.dp)) {
-                Text("Explora las descripciones de las obras por materia, persona o lugar. El texto de las páginas se busca en Buscar.",
+            if (opened == null && selectedConcept == null) Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
+                Text(tr("Explora as descricións das obras por materia, persoa ou lugar. O texto das páxinas búscase en Buscar.", "Explora las descripciones de las obras por materia, persona o lugar. El texto de las páginas se busca en Buscar."),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(12.dp))
                 RowTabs(tab) {
@@ -284,14 +286,14 @@ fun DatosScreen(
             }
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             error?.let { message ->
-                Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
-                    Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
-                    TextButton(onClick = { retryCurrent() }, enabled = !loading) { Text("Reintentar") }
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                    Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.liveStatus())
+                    androidx.compose.material3.OutlinedButton(onClick = { retryCurrent() }, enabled = !loading, modifier = Modifier.heightIn(min = 48.dp)) { Text("Reintentar") }
                 }
             }
             if (opened != null) {
                 val work = opened
-                LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(24.dp)) {
+                LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp)) {
                     item {
                         Text(work.title, style = MaterialTheme.typography.headlineSmall)
                         work.creators.forEach { Text(it, modifier = Modifier.padding(top = 8.dp)) }
@@ -302,11 +304,11 @@ fun DatosScreen(
                         }, modifier = Modifier.fillMaxWidth().padding(top = 24.dp)) { Text("Abrir documento") } }
                         work.recordUrl?.takeIf { it.startsWith("${GalicianaUrls.BASE}/") }?.let { url ->
                             TextButton(onClick = { uriHandler.openUri(url) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                                Text("Ficha original · abre el navegador")
+                                Text(tr("Ficha orixinal · abre o navegador", "Ficha original · abre el navegador"))
                             }
                         }
-                        work.rights?.let { Text("Derechos: $it", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 20.dp)) }
-                        TextButton(onClick = { metadataExpanded = !metadataExpanded }) { Text(if (metadataExpanded) "Ocultar identificadores" else "Identificadores del registro") }
+                        work.rights?.let { Text(tr("Dereitos: $it", "Derechos: $it"), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 20.dp)) }
+                        TextButton(onClick = { metadataExpanded = !metadataExpanded }) { Text(if (metadataExpanded) "Ocultar identificadores" else tr("Identificadores do rexistro", "Identificadores del registro")) }
                         if (metadataExpanded) {
                             Text("OAI: ${work.oaiId}", style = MaterialTheme.typography.bodySmall)
                             work.catalogId?.let { Text("Catálogo: $it", style = MaterialTheme.typography.bodySmall) }
@@ -316,10 +318,10 @@ fun DatosScreen(
             } else when (tab) {
                 "explorar" -> {
                     if (selectedConcept == null) {
-                        Column(Modifier.padding(horizontal = 24.dp)) {
+                        Column(Modifier.padding(horizontal = 20.dp)) {
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(listOf("materias" to "Materias", "personas" to "Personas", "lugares" to "Lugares")) { (id, label) ->
-                                    FilterChip(selected = facet == id, onClick = {
+                                items(listOf("materias" to "Materias", "personas" to tr("Persoas", "Personas"), "lugares" to "Lugares")) { (id, label) ->
+                                    gal.galiciana.app.ui.SelectChip(selected = facet == id, onClick = {
                                         detailGeneration++; detailTask?.cancel(); loading = false; error = null
                                         facet = id; subjects = emptyList(); subjectApplied = ""; subjectsReady = false
                                     }, label = { Text(label) })
@@ -327,77 +329,96 @@ fun DatosScreen(
                             }
                             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                gal.galiciana.app.ui.ClearableField(subjectQuery, { subjectQuery = it }, "Buscar $facet",
+                                gal.galiciana.app.ui.ClearableField(subjectQuery, { subjectQuery = it }, when (facet) {
+                                        "personas" -> tr("Buscar persoas", "Buscar personas")
+                                        "lugares" -> tr("Buscar lugares", "Buscar lugares")
+                                        else -> tr("Buscar materias", "Buscar materias")
+                                    },
                                     Modifier.weight(1f), onSearch = { searchSubjects() })
-                                FilledTonalButton(onClick = { searchSubjects() }, enabled = !loading && subjectQuery.isNotBlank()) { Text("Buscar") }
+                                androidx.compose.material3.Button(onClick = { searchSubjects() }, enabled = !loading && subjectQuery.isNotBlank()) { Text("Buscar") }
                             }
-                            if (subjectApplied.isNotBlank()) Text("Resultados de «$subjectApplied»", style = MaterialTheme.typography.bodySmall,
+                            // A blank index gets a few starting points instead of an empty half screen.
+                            if (subjectApplied.isBlank() && !loading) {
+                                Text(tr("Por exemplo", "Por ejemplo"), style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+                                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    when (facet) {
+                                        "personas" -> listOf("Rosalía de Castro", "Castelao", "Emilia Pardo Bazán")
+                                        "lugares" -> listOf("Vigo", "Lugo", "Ferrol")
+                                        else -> listOf(tr("Emigración", "Emigración"), tr("Agricultura", "Agricultura"), tr("Teatro", "Teatro"))
+                                    }.forEach { example ->
+                                        androidx.compose.material3.SuggestionChip(onClick = { subjectQuery = example; searchSubjects() },
+                                            label = { Text(example) }, modifier = Modifier.heightIn(min = 48.dp))
+                                    }
+                                }
+                            }
+                            if (subjectApplied.isNotBlank()) Text(tr("Resultados de «$subjectApplied»", "Resultados de «$subjectApplied»"), style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
                         }
-                        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp)) {
+                        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)) {
                             if (!loading && subjectsReady && subjects.isEmpty() && error == null && subjectApplied.isNotBlank()) item {
-                                Text("No se encontraron entradas en este índice. Prueba otro nombre o término.", Modifier.padding(vertical = 16.dp))
+                                Text(tr("Non se atoparon entradas neste índice. Proba outro nome ou termo.", "No se encontraron entradas en este índice. Prueba otro nombre o término."), Modifier.padding(vertical = 16.dp))
                             }
                             items(subjects, key = { it.second }) { concept ->
                                 ListItem(headlineContent = { Text(concept.first) }, supportingContent = { Text("Ver obras relacionadas") },
-                                    modifier = Modifier.clickable { openConcept(concept) })
+                                    modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { openConcept(concept) })
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             }
                         }
                     } else {
-                        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(24.dp)) {
+                        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp)) {
                             item {
                                 Text(selectedConcept!!.first, style = MaterialTheme.typography.headlineSmall)
-                                Text("Estos títulos permiten continuar en la búsqueda general del catálogo.",
+                                Text(tr("Estes títulos permiten continuar na busca xeral do catálogo.", "Estos títulos permiten continuar en la búsqueda general del catálogo."),
                                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 8.dp, bottom = 20.dp))
                             }
                             items(relatedWorks, key = { it.second.ifBlank { it.first } }) { (title, _) ->
-                                ListItem(headlineContent = { Text(title) }, supportingContent = { Text("Buscar este título en el catálogo") },
-                                    modifier = Modifier.clickable { onBuscarTitle(title) })
+                                ListItem(headlineContent = { Text(title) }, supportingContent = { Text(tr("Buscar este título no catálogo", "Buscar este título en el catálogo")) },
+                                    modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { onBuscarTitle(title) })
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             }
-                            if (!loading && error == null && relatedWorks.isEmpty()) item { Text("No se encontraron obras relacionadas.") }
+                            if (!loading && error == null && relatedWorks.isEmpty()) item { Text(tr("Non se atoparon obras relacionadas.", "No se encontraron obras relacionadas.")) }
                         }
                     }
                 }
                 "obras" -> {
-                    Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
+                    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            gal.galiciana.app.ui.ClearableField(sparqlQ, { sparqlQ = it }, "Palabras del título", Modifier.weight(1f), onSearch = { runSparql() })
-                            FilledTonalButton(onClick = { runSparql() }, enabled = !loading && sparqlQ.isNotBlank()) { Text("Buscar") }
+                            gal.galiciana.app.ui.ClearableField(sparqlQ, { sparqlQ = it }, tr("Palabras do título", "Palabras del título"), Modifier.weight(1f), onSearch = { runSparql() })
+                            androidx.compose.material3.Button(onClick = { runSparql() }, enabled = !loading && sparqlQ.isNotBlank()) { Text("Buscar") }
                         }
-                        if (sparqlApplied.isNotBlank()) Text("Títulos que contienen «$sparqlApplied» · hasta 25 resultados",
+                        if (sparqlApplied.isNotBlank()) Text(tr("Títulos que conteñen «$sparqlApplied» · ata 25 resultados", "Títulos que contienen «$sparqlApplied» · hasta 25 resultados"),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
                     }
-                    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 24.dp)) {
+                    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 20.dp)) {
                         val titles = sparqlOut.lines().filter { it.isNotBlank() }
-                        if (!loading && titlesReady && error == null && sparqlApplied.isNotBlank() && titles.isEmpty()) item { Text("No se encontraron títulos con esas palabras.", Modifier.padding(vertical = 16.dp)) }
+                        if (!loading && titlesReady && error == null && sparqlApplied.isNotBlank() && titles.isEmpty()) item { Text(tr("Non se atoparon títulos con esas palabras.", "No se encontraron títulos con esas palabras."), Modifier.padding(vertical = 16.dp)) }
                         items(titles) { title ->
-                            ListItem(headlineContent = { Text(title) }, supportingContent = { Text("Buscar este título en el catálogo") },
-                                modifier = Modifier.clickable { onBuscarTitle(title) })
+                            ListItem(headlineContent = { Text(title) }, supportingContent = { Text(tr("Buscar este título no catálogo", "Buscar este título en el catálogo")) },
+                                modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { onBuscarTitle(title) })
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         }
                     }
                 }
-                "fuentes" -> LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    item { Text("Fuentes y formatos", style = MaterialTheme.typography.headlineSmall) }
-                    item { Text("Los índices enlazan descripciones del catálogo. OAI permite consultar registros y SPARQL consultar sus relaciones. Estas herramientas no buscan el texto OCR de las páginas.") }
-                    item { TextButton(onClick = { uriHandler.openUri("${GalicianaUrls.BASE}/es/datos_abiertos/datos_abiertos.do") }) { Text("Datos abiertos de Galiciana · navegador") } }
-                    item { TextButton(onClick = { uriHandler.openUri("https://datos-abertos.galiciana.gal/arpad-bibdix-lod/es/sparql") }) { Text("Consulta SPARQL avanzada · navegador") } }
+                "fuentes" -> LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    item { Text(tr("Fontes e formatos", "Fuentes y formatos"), style = MaterialTheme.typography.headlineSmall) }
+                    item { Text(tr("Os índices enlazan descricións do catálogo. OAI permite consultar rexistros e SPARQL consultar as súas relacións. Estas ferramentas non buscan o texto OCR das páxinas.", "Los índices enlazan descripciones del catálogo. OAI permite consultar registros y SPARQL consultar sus relaciones. Estas herramientas no buscan el texto OCR de las páginas.")) }
+                    item { TextButton(onClick = { uriHandler.openUri("${GalicianaUrls.BASE}/es/datos_abiertos/datos_abiertos.do") }) { Text(tr("Datos abertos de Galiciana · navegador", "Datos abiertos de Galiciana · navegador")) } }
+                    item { TextButton(onClick = { uriHandler.openUri("https://datos-abertos.galiciana.gal/arpad-bibdix-lod/es/sparql") }) { Text(tr("Consulta avanzada (SPARQL) no navegador", "Consulta avanzada (SPARQL) en el navegador")) } }
                 }
-                else -> LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(24.dp)) {
-                    item { Text("Registros del catálogo (OAI)", style = MaterialTheme.typography.titleMedium)
-                        Text("Consulta técnica de metadatos; no es una lista de resultados OCR.", style = MaterialTheme.typography.bodySmall,
+                else -> LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp)) {
+                    item { Text(tr("Rexistros do catálogo (OAI)", "Registros del catálogo (OAI)"), style = MaterialTheme.typography.titleMedium)
+                        Text(tr("Consulta técnica de metadatos; non é unha lista de resultados OCR.", "Consulta técnica de metadatos; no es una lista de resultados OCR."), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)) }
-                    if (!loading && error == null && recordsReady && works.isEmpty()) item { Text("El servicio no devolvió registros para esta consulta.", Modifier.padding(vertical = 16.dp)) }
+                    if (!loading && error == null && recordsReady && works.isEmpty()) item { Text(tr("O servizo non devolveu rexistros para esta consulta.", "El servicio no devolvió registros para esta consulta."), Modifier.padding(vertical = 16.dp)) }
                     items(works, key = { it.oaiId }) { work ->
                         ListItem(headlineContent = { Text(work.title) }, supportingContent = { Text(listOfNotNull(work.date, work.creators.firstOrNull()).joinToString(" · ")) },
-                            modifier = Modifier.clickable { openedState = saveWork(work); metadataExpanded = false; error = null })
+                            modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { openedState = saveWork(work); metadataExpanded = false; error = null })
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
-                    if (oai.nextToken != null) item { TextButton(onClick = { moreOai() }, enabled = !loading) { Text("Cargar más registros") } }
+                    if (oai.nextToken != null) item { TextButton(onClick = { moreOai() }, enabled = !loading) { Text(tr("Cargar máis rexistros", "Cargar más registros")) } }
                 }
             }
         }
@@ -408,13 +429,13 @@ fun DatosScreen(
 private fun RowTabs(current: String, onPick: (String) -> Unit) {
     var more by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-        FilterChip(selected = current == "explorar", onClick = { onPick("explorar") }, label = { Text("Índices") })
-        FilterChip(selected = current == "obras", onClick = { onPick("obras") }, label = { Text("Por título") })
+        gal.galiciana.app.ui.SelectChip(selected = current == "explorar", onClick = { onPick("explorar") }, label = { Text("Índices") })
+        gal.galiciana.app.ui.SelectChip(selected = current == "obras", onClick = { onPick("obras") }, label = { Text("Por título") })
         Box {
-            TextButton(onClick = { more = true }) { Text(when (current) { "oai" -> "Registros OAI"; "fuentes" -> "Fuentes"; else -> "Más opciones" }) }
+            TextButton(onClick = { more = true }) { Text(when (current) { "oai" -> tr("Rexistros OAI", "Registros OAI"); "fuentes" -> tr("Fontes", "Fuentes"); else -> tr("Máis opcións", "Más opciones") }) }
             DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
-                DropdownMenuItem(text = { Text("Registros del catálogo (OAI)") }, onClick = { more = false; onPick("oai") })
-                DropdownMenuItem(text = { Text("Fuentes y formatos") }, onClick = { more = false; onPick("fuentes") })
+                DropdownMenuItem(text = { Text(tr("Rexistros do catálogo (OAI)", "Registros del catálogo (OAI)")) }, onClick = { more = false; onPick("oai") })
+                DropdownMenuItem(text = { Text(tr("Fontes e formatos", "Fuentes y formatos")) }, onClick = { more = false; onPick("fuentes") })
             }
         }
     }
@@ -444,10 +465,10 @@ private fun requestSparql(query: String): String {
         .header("Accept", "application/sparql-results+json, application/json")
         .build()
     return Http.client.newCall(request).execute().use { response ->
-        if (!response.isSuccessful) error("Galiciana Datos Abiertos: HTTP ${response.code}")
+        if (!response.isSuccessful) error(tr("Galiciana Datos Abertos: HTTP ${response.code}", "Galiciana Datos Abiertos: HTTP ${response.code}"))
         val raw = response.body?.string().orEmpty()
         if (!raw.trimStart().startsWith("{"))
-            error("Galiciana Datos Abiertos devolvió una página web en lugar de resultados. Inténtalo más tarde.")
+            error(tr("Galiciana Datos Abertos devolveu unha páxina web en lugar de resultados. Téntao máis tarde.", "Galiciana Datos Abiertos devolvió una página web en lugar de resultados. Inténtalo más tarde."))
         raw
     }
 }

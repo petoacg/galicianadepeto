@@ -1,0 +1,1 @@
+Interfaz en gallego por defecto, español a elección. Visor: lista de páginas con coincidencias, flechas que saltan entre páginas e indicador de la coincidencia activa. Guardados con una sola fila de carpetas. Formulario de búsqueda más simple, guardado de varias páginas a la vez, índice A–Z en la Hemeroteca y mensajes de error más claros.

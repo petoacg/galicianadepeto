@@ -1,5 +1,6 @@
 package gal.galiciana.app.data
 
+import gal.galiciana.app.i18n.tr
 import java.io.InputStream
 import java.io.OutputStream
 import java.io.ByteArrayOutputStream
@@ -12,7 +13,7 @@ import java.util.zip.ZipOutputStream
 enum class BackupPreferenceType { STRING, BOOLEAN, INT, LONG, FLOAT, STRING_SET }
 data class BackupPreference(val type: BackupPreferenceType, val values: List<String>) {
     fun rawValue(): Any {
-        require(type == BackupPreferenceType.STRING_SET || values.size == 1) { "Valor de preferencia inválido" }
+        require(type == BackupPreferenceType.STRING_SET || values.size == 1) { tr("Valor de preferencia non válido", "Valor de preferencia inválido") }
         return when (type) {
             BackupPreferenceType.STRING -> values.single()
             BackupPreferenceType.BOOLEAN -> values.single().let { require(it == "true" || it == "false"); it.toBoolean() }
@@ -30,7 +31,7 @@ data class BackupPreference(val type: BackupPreferenceType, val values: List<Str
             is Long -> BackupPreference(BackupPreferenceType.LONG, listOf(value.toString()))
             is Float -> BackupPreference(BackupPreferenceType.FLOAT, listOf(value.toString()))
             is Set<*> -> BackupPreference(BackupPreferenceType.STRING_SET, value.map { require(it is String); it }.sorted())
-            else -> error("Tipo de preferencia no compatible")
+            else -> error(tr("Tipo de preferencia non compatible", "Tipo de preferencia no compatible"))
         }
     }
 }
@@ -56,45 +57,45 @@ object BackupFormat {
         val data = data(payload)
         val checksum = sha256(BackupJson.encode(data).toByteArray(Charsets.UTF_8))
         val bytes = BackupJson.encode(data + ("sha256" to checksum)).toByteArray(Charsets.UTF_8)
-        require(bytes.size <= MAX_BYTES) { "La copia supera el límite de 8 MiB" }
+        require(bytes.size <= MAX_BYTES) { tr("A copia supera o límite de 8 MiB", "La copia supera el límite de 8 MiB") }
         ZipOutputStream(output).use { zip ->
             zip.putNextEntry(ZipEntry(ENTRY)); zip.write(bytes); zip.closeEntry()
         }
     }
     fun read(input: InputStream): BackupPayload {
         val bytes = ZipInputStream(input).use { zip ->
-            val entry = zip.nextEntry ?: error("El archivo no contiene una copia válida")
-            require(!entry.isDirectory && entry.name == ENTRY) { "La copia contiene rutas o archivos no permitidos" }
-            require(entry.size <= MAX_BYTES || entry.size == -1L) { "La copia supera el tamaño permitido" }
+            val entry = zip.nextEntry ?: error(tr("O ficheiro non contén unha copia válida", "El archivo no contiene una copia válida"))
+            require(!entry.isDirectory && entry.name == ENTRY) { tr("A copia contén rutas ou ficheiros non permitidos", "La copia contiene rutas o archivos no permitidos") }
+            require(entry.size <= MAX_BYTES || entry.size == -1L) { tr("A copia supera o tamaño permitido", "La copia supera el tamaño permitido") }
             val output = ByteArrayOutputStream()
             val buffer = ByteArray(8192)
             while (true) {
                 val count = zip.read(buffer)
                 if (count < 0) break
-                require(output.size() + count <= MAX_BYTES) { "La copia supera el tamaño permitido" }
+                require(output.size() + count <= MAX_BYTES) { tr("A copia supera o tamaño permitido", "La copia supera el tamaño permitido") }
                 output.write(buffer, 0, count)
             }
             zip.closeEntry()
-            require(zip.nextEntry == null) { "La copia contiene archivos adicionales o duplicados" }
+            require(zip.nextEntry == null) { tr("A copia contén ficheiros adicionais ou duplicados", "La copia contiene archivos adicionales o duplicados") }
             output.toByteArray()
         }
-        val root = BackupJson.parse(bytes.toString(Charsets.UTF_8)) as? Map<*, *> ?: error("Manifiesto inválido")
-        require(root.keys == setOf("format", "version", "createdAt", "preferences", "sha256")) { "Estructura de copia no compatible" }
-        require(root["format"] == "galiciana-peto-preferences" && root["version"] == VERSION.toLong()) { "Versión de copia no compatible" }
-        val created = root["createdAt"] as? Long ?: error("Fecha de copia inválida")
+        val root = BackupJson.parse(bytes.toString(Charsets.UTF_8)) as? Map<*, *> ?: error(tr("Manifesto non válido", "Manifiesto inválido"))
+        require(root.keys == setOf("format", "version", "createdAt", "preferences", "sha256")) { tr("Estrutura de copia non compatible", "Estructura de copia no compatible") }
+        require(root["format"] == "galiciana-peto-preferences" && root["version"] == VERSION.toLong()) { tr("Versión de copia non compatible", "Versión de copia no compatible") }
+        val created = root["createdAt"] as? Long ?: error(tr("Data de copia non válida", "Fecha de copia inválida"))
         require(created >= 0)
-        val checksum = root["sha256"] as? String ?: error("Falta la suma de comprobación")
+        val checksum = root["sha256"] as? String ?: error(tr("Falta a suma de comprobación", "Falta la suma de comprobación"))
         require(checksum.matches(Regex("[0-9a-f]{64}")))
         val unsigned = root.filterKeys { it != "sha256" }
-        require(sha256(BackupJson.encode(unsigned).toByteArray(Charsets.UTF_8)) == checksum) { "La copia está dañada: no coincide su SHA-256" }
-        val entries = root["preferences"] as? Map<*, *> ?: error("Preferencias inválidas")
+        require(sha256(BackupJson.encode(unsigned).toByteArray(Charsets.UTF_8)) == checksum) { tr("A copia está danada: non coincide o seu SHA-256", "La copia está dañada: no coincide su SHA-256") }
+        val entries = root["preferences"] as? Map<*, *> ?: error(tr("Preferencias non válidas", "Preferencias inválidas"))
         require(entries.size <= MAX_PREFERENCES)
         val preferences = entries.map { (key, raw) ->
             require(key is String && key.length <= 4096)
-            val item = raw as? Map<*, *> ?: error("Preferencia inválida")
+            val item = raw as? Map<*, *> ?: error(tr("Preferencia non válida", "Preferencia inválida"))
             require(item.keys == setOf("type", "values"))
-            val type = BackupPreferenceType.valueOf(item["type"] as? String ?: error("Tipo de preferencia inválido"))
-            val values = (item["values"] as? List<*>)?.map { require(it is String); it } ?: error("Valor de preferencia inválido")
+            val type = BackupPreferenceType.valueOf(item["type"] as? String ?: error(tr("Tipo de preferencia non válido", "Tipo de preferencia inválido")))
+            val values = (item["values"] as? List<*>)?.map { require(it is String); it } ?: error(tr("Valor de preferencia non válido", "Valor de preferencia inválido"))
             key to BackupPreference(type, values).also { it.rawValue() }
         }.toMap()
         return BackupPayload(preferences, created)
@@ -114,7 +115,7 @@ internal object BackupJson {
         is Boolean, is Number -> value.toString()
         is Map<*, *> -> value.entries.sortedBy { it.key as String }.joinToString(",", "{", "}") { encode(it.key as String) + ":" + encode(it.value) }
         is List<*> -> value.joinToString(",", "[", "]") { encode(it) }
-        else -> error("Valor JSON no compatible")
+        else -> error(tr("Valor JSON non compatible", "Valor JSON no compatible"))
     }
     fun parse(source: String): Any? {
         require(source.length <= BackupFormat.MAX_BYTES)
@@ -135,11 +136,11 @@ internal object BackupJson {
                         'b' -> result.append('\b'); 'f' -> result.append('\u000C')
                         'n' -> result.append('\n'); 'r' -> result.append('\r'); 't' -> result.append('\t')
                         'u' -> { require(at + 4 <= source.length); result.append(source.substring(at, at + 4).toInt(16).toChar()); at += 4 }
-                        else -> error("Escape JSON inválido")
+                        else -> error(tr("Escape JSON non válido", "Escape JSON inválido"))
                     }
                 }
             }
-            error("Cadena JSON incompleta")
+            error(tr("Cadea JSON incompleta", "Cadena JSON incompleta"))
         }
         fun value(depth: Int): Any? {
             require(depth <= 32) { "JSON demasiado anidado" }; whitespace(); require(at < source.length)
@@ -174,11 +175,11 @@ internal object BackupJson {
                     val start = at
                     while (at < source.length && source[at] in "0123456789-+.eE") at++
                     val number = source.substring(start, at)
-                    require(number.matches(Regex("-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?"))) { "Número JSON inválido" }
+                    require(number.matches(Regex("-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?"))) { tr("Número JSON non válido", "Número JSON inválido") }
                     number.toLongOrNull() ?: number.toDouble().also { require(it.isFinite()) }
                 }
             }
         }
-        val result = value(0); whitespace(); require(at == source.length) { "Contenido adicional tras JSON" }; return result
+        val result = value(0); whitespace(); require(at == source.length) { tr("Contido adicional tras o JSON", "Contenido adicional tras JSON") }; return result
     }
 }

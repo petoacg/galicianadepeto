@@ -1,0 +1,46 @@
+${vm.groups.sumOf { it.occurrenceCount }} extractos cargados
+${vm.works.size} obras cargadas
+Abrir
+Abrir documento
+Anterior
+Busca en Galiciana
+Buscar
+Buscar con esta consulta
+Buscar con filtros
+Cancelar
+Catálogo: $it
+Comprobando variantes de OCR…
+Conservar nota
+Consulta SPARQL avanzada · navegador
+Consultar todo: ${parent.title}
+Copiar versión conservada
+Crear
+Descargar (${picked.size})
+Descartar cambios
+Eliminar
+Eliminar nota de referencia
+Entendido
+Exportar referencias
+Filtros
+Fondos por tipo de documento
+Ir
+JPEG
+Lectura
+Nota de referencia
+Notas de referencia
+OAI: ${work.oaiId}
+Obras destacadas
+PDF
+PDF separados
+PDF único
+Por título
+Quitar
+Reintentar
+Resultados de «$subjectApplied»
+Seguir editando
+Seleccionado
+Seleccionar todos (${filtered.size})
+Tema orientativo: ${vm.submittedSection}
+Ver obras relacionadas
+Versión $it
+Índices

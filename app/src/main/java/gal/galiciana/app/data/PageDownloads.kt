@@ -1,5 +1,6 @@
 package gal.galiciana.app.data
 
+import gal.galiciana.app.i18n.tr
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.BitmapFactory
@@ -66,7 +67,7 @@ object PageDownloads {
             var jpeg = image
             if (image.size < 2 || image[0] != 0xFF.toByte() || image[1] != 0xD8.toByte()) {
                 val bitmap = BitmapFactory.decodeByteArray(image, 0, image.size)
-                    ?: error("Imagen no válida para el PDF")
+                    ?: error(tr("Imaxe non válida para o PDF", "Imagen no válida para el PDF"))
                 val encoded = ByteArrayOutputStream()
                 try { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, encoded) }
                 finally { bitmap.recycle() }
@@ -76,7 +77,7 @@ object PageDownloads {
             BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size, dimensions)
             val width = dimensions.outWidth
             val height = dimensions.outHeight
-            require(width > 0 && height > 0) { "Dimensiones de imagen no válidas" }
+            require(width > 0 && height > 0) { tr("Dimensións de imaxe non válidas", "Dimensiones de imagen no válidas") }
             // Validate and lay out OCR before adding any page objects to the PDF.
             val hiddenText = pdfOcrCommands(ocr, width, height)
             val pageId = 4 + pageIds.size * 3
@@ -162,7 +163,7 @@ object PageDownloads {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             val folder = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
                 ?: context.filesDir, "Galiciana")
-            if (!folder.exists() && !folder.mkdirs()) error("No se pudo crear la carpeta")
+            if (!folder.exists() && !folder.mkdirs()) error(tr("Non se puido crear o cartafol", "No se pudo crear la carpeta"))
             file.copyTo(File(folder, name), overwrite = false)
             return
         }
@@ -174,10 +175,10 @@ object PageDownloads {
         }
         val resolver = context.contentResolver
         val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-            ?: error("No se pudo crear el PDF")
+            ?: error(tr("Non se puido crear o PDF", "No se pudo crear el PDF"))
         try {
             resolver.openOutputStream(uri)?.use { target -> file.inputStream().use { it.copyTo(target) } }
-                ?: error("No se pudo escribir el PDF")
+                ?: error(tr("Non se puido escribir o PDF", "No se pudo escribir el PDF"))
             resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
         } catch (e: Exception) {
             resolver.delete(uri, null, null)
@@ -188,7 +189,7 @@ object PageDownloads {
     suspend fun pdf(context: Context, path: String, position: Int, knownImageId: String? = null): ByteArray = withContext(Dispatchers.IO) {
         require(path.matches(Regex("\\d+")) && position > 0)
         val imageId = knownImageId ?: MetsRepository().load(path).pages.firstOrNull { it.position == position }?.imageId
-            ?: error("Imagen no identificada")
+            ?: error(tr("Imaxe non identificada", "Imagen no identificada"))
         val image = gal.galiciana.app.ui.viewer.fetchFullGalicianaPage(path, position, imageId)
         CombinedPdf(context).use { document ->
             document.add(image, ocr(path, position))
@@ -202,12 +203,12 @@ object PageDownloads {
         val png = bytes.size > 8 && bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte()
         if (isPdf) {
             if (bytes.size < 5 || !bytes.copyOfRange(0, 5).contentEquals("%PDF-".toByteArray()))
-                error("La respuesta no es un PDF")
-        } else if (!jpeg && !png) error("La respuesta no es una imagen")
+                error(tr("A resposta non é un PDF", "La respuesta no es un PDF"))
+        } else if (!jpeg && !png) error(tr("A resposta non é unha imaxe", "La respuesta no es una imagen"))
         // The image fallback can be PNG. A JPEG choice must produce a JPEG file.
         val output = if (!isPdf && png) {
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                ?: error("No se pudo convertir la imagen a JPEG")
+                ?: error(tr("Non se puido converter a imaxe a JPEG", "No se pudo convertir la imagen a JPEG"))
             try {
                 ByteArrayOutputStream().use { target ->
                     check(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, target))
@@ -221,7 +222,7 @@ object PageDownloads {
             val folder = File(context.getExternalFilesDir(
                 if (isPdf) Environment.DIRECTORY_DOWNLOADS else Environment.DIRECTORY_PICTURES,
             ) ?: context.filesDir, "Galiciana")
-            if (!folder.exists() && !folder.mkdirs()) error("No se pudo crear la carpeta")
+            if (!folder.exists() && !folder.mkdirs()) error(tr("Non se puido crear o cartafol", "No se pudo crear la carpeta"))
             File(folder, name).writeBytes(output)
             return
         }
@@ -236,9 +237,9 @@ object PageDownloads {
         val resolver = context.contentResolver
         val collection = if (isPdf) MediaStore.Downloads.EXTERNAL_CONTENT_URI
             else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-        val uri = resolver.insert(collection, values) ?: error("No se pudo crear el archivo")
+        val uri = resolver.insert(collection, values) ?: error(tr("Non se puido crear o ficheiro", "No se pudo crear el archivo"))
         try {
-            resolver.openOutputStream(uri)?.use { it.write(output) } ?: error("No se pudo escribir el archivo")
+            resolver.openOutputStream(uri)?.use { it.write(output) } ?: error(tr("Non se puido escribir o ficheiro", "No se pudo escribir el archivo"))
             resolver.update(uri, ContentValues().apply {
                 put(MediaStore.MediaColumns.IS_PENDING, 0)
             }, null, null)

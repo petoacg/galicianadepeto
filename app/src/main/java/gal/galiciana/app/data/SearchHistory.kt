@@ -1,5 +1,6 @@
 package gal.galiciana.app.data
 
+import gal.galiciana.app.i18n.tr
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
@@ -15,16 +16,18 @@ data class SearchPreset(
         .put("query", query).put("title", title).put("author", author).put("place", place)
         .put("yearFrom", yearFrom).put("yearTo", yearTo).put("section", section)
         .put("advanced", advanced).put("fullText", fullText)
-    fun criteriaKey(): String = listOf(query, title, author, place, yearFrom, yearTo, section, advanced, fullText).joinToString("\u0000")
-    fun label(): String = query.ifBlank { title.ifBlank { author.ifBlank { place.ifBlank { "Consulta del catálogo" } } } }
+    /** Filters only count while the filter form is on; hidden leftovers do not make a new search. */
+    fun criteriaKey(): String = (if (advanced) listOf(query, title, author, place, yearFrom, yearTo, section, true, fullText)
+        else listOf(query.trim().lowercase(), fullText)).joinToString("\u0000")
+    fun label(): String = query.ifBlank { title.ifBlank { author.ifBlank { place.ifBlank { tr("Consulta do catálogo", "Consulta del catálogo") } } } }
     fun summary(): String = buildList {
-        add(if (fullText) "Texto completo" else "Catálogo")
+        add(if (fullText) tr("Texto completo", "Texto completo") else tr("Catálogo", "Catálogo"))
         if (advanced) {
-            if (title.isNotBlank()) add("Título: $title")
-            if (author.isNotBlank()) add("Autor: $author")
-            if (place.isNotBlank()) add("Lugar: $place")
+            if (title.isNotBlank()) add(tr("Título: $title", "Título: $title"))
+            if (author.isNotBlank()) add(tr("Autor: $author", "Autor: $author"))
+            if (place.isNotBlank()) add(tr("Lugar: $place", "Lugar: $place"))
             if (yearFrom.isNotBlank() || yearTo.isNotBlank()) add("${yearFrom.ifBlank { "…" }}–${yearTo.ifBlank { "…" }}")
-            if (section.isNotBlank()) add("Tema: $section")
+            if (section.isNotBlank()) add(tr("Tema: $section", "Tema: $section"))
         }
     }.joinToString(" · ")
     companion object {

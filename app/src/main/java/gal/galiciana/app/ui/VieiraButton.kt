@@ -1,5 +1,7 @@
 package gal.galiciana.app.ui
 
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import gal.galiciana.app.i18n.tr
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.toggleable
@@ -34,14 +36,16 @@ fun VieiraButton(
     size: Dp = 22.dp,
     forcedCeleste: Boolean = false,
     contentLabel: String? = null,
+    interactive: Boolean = true,
 ) {
-    val action = contentLabel ?: if (forcedCeleste) "Abrir favoritos" else if (selected) "Quitar página de favoritos" else "Guardar página en favoritos"
-    val interaction = if (forcedCeleste) Modifier.clickable(role = Role.Button, onClick = onClick)
+    val action = contentLabel ?: if (forcedCeleste) tr("Abrir Gardados", "Abrir Guardados") else tr("Gardar páxina", "Guardar página")
+    val interaction = if (!interactive) Modifier else if (forcedCeleste) Modifier.clickable(role = Role.Button, onClick = onClick)
         else Modifier.toggleable(value = selected, role = Role.Checkbox, onValueChange = { onClick() })
     val ink = if (selected || forcedCeleste) Color(0xFF12384F) else androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
-    Box(modifier.size(maxOf(48.dp, size)).then(interaction).semantics {
+    // On its own screen the brand mark is decoration: nothing to press, nothing to announce.
+    Box(modifier.size(maxOf(48.dp, size)).then(interaction).then(if (!interactive) Modifier.clearAndSetSemantics { } else Modifier).semantics {
         contentDescription = action
-        if (!forcedCeleste) stateDescription = if (selected) "Guardada" else "Sin guardar"
+        if (!forcedCeleste) stateDescription = if (selected) tr("Gardada", "Guardada") else tr("Sen gardar", "Sin guardar")
     }, contentAlignment = Alignment.Center) {
     Canvas(Modifier.size(size)) {
         val w = this.size.width
@@ -65,7 +69,7 @@ fun VieiraButton(
         drawPath(
             path,
             ink,
-            style = Stroke(width = 1.6f, cap = StrokeCap.Round, join = StrokeJoin.Round),
+            style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
         val base = Offset(cx, h * 0.78f)
         for (i in -3..3) {
@@ -74,7 +78,7 @@ fun VieiraButton(
                 cx + r * 0.78f * cos(ang).toFloat(),
                 cy + r * 0.72f * sin(ang).toFloat(),
             )
-            drawLine(ink, base, tip, strokeWidth = 1.15f, cap = StrokeCap.Round)
+            drawLine(ink, base, tip, strokeWidth = 1.dp.toPx(), cap = StrokeCap.Round)
         }
     }
 }
