@@ -1,0 +1,1 @@
+The viewer no longer downloads the whole document when opened from a search: it lists at once the pages with matches the results already know and reads the rest only when you tap «Review the whole document». Smoother navigation.

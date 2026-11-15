@@ -1,0 +1,1 @@
+El visor ya no descarga el documento entero al entrar desde una búsqueda: muestra al momento las páginas con coincidencias que ya conocen los resultados y revisa el resto solo si pulsas «Revisar todo el documento». Navegación más fluida.
