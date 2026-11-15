@@ -57,8 +57,29 @@ internal fun adjacentMatchPage(matchPages: Collection<Int>, current: Int, forwar
 }
 
 /**
+ * Pages of a document that the last search results named for a query. The viewer
+ * lists them at once instead of downloading every page to find them again.
+ */
+object SearchPageHints {
+    private var path: String? = null
+    private var query: String = ""
+    private var known: Set<Int> = emptySet()
+
+    fun remember(path: String, query: String, pages: Set<Int>) {
+        this.path = path
+        this.query = gal.galiciana.app.ui.highlightTerms(query)
+        known = pages
+    }
+
+    fun pages(path: String, query: String): Set<Int> =
+        if (path == this.path && gal.galiciana.app.ui.highlightTerms(query) == this.query && this.query.isNotBlank()) known
+        else emptySet()
+}
+
+/**
  * One line under the viewer's query: the pages of this document whose text contains
- * it, as numbers to jump to, with the open page marked.
+ * it, as numbers to jump to, with the open page marked. Until the reader asks to
+ * read the rest of the document, the numbers are those the search results named.
  */
 @Composable
 internal fun MatchPagesRow(
@@ -68,10 +89,11 @@ internal fun MatchPagesRow(
     toCheck: Int,
     failed: Int,
     pageCount: Int,
+    scanned: Boolean,
     onOpen: (Int) -> Unit,
-    onRetry: () -> Unit,
+    onScanAll: () -> Unit,
 ) {
-    val scanning = checked < toCheck
+    val scanning = scanned && checked < toCheck
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
@@ -79,46 +101,57 @@ internal fun MatchPagesRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (pages.keys == setOf(current) && !scanning) {
-            Text(tr("Só nesta páxina", "Solo en esta página"),
+        val onlyHere = pages.keys.all { it == current }
+        when {
+            pages.isNotEmpty() && onlyHere && !scanning -> Text(
+                if (scanned) tr("Só nesta páxina", "Solo en esta página") else tr("Nos resultados, só esta páxina", "En los resultados, solo esta página"),
                 style = MaterialTheme.typography.labelMedium, color = muted)
-        } else if (pages.isEmpty()) {
-            Text(
-                if (scanning) tr("Buscando noutras páxinas… $checked de $toCheck", "Buscando en otras páginas… $checked de $toCheck")
-                else if (failed == toCheck) tr("Non se puideron revisar as outras páxinas", "No se pudieron revisar las otras páginas")
-                else tr("Non aparece no texto doutras páxinas", "No aparece en el texto de otras páginas"),
+            pages.isEmpty() -> Text(
+                when {
+                    scanning -> tr("Buscando noutras páxinas… $checked de $toCheck", "Buscando en otras páginas… $checked de $toCheck")
+                    !scanned -> tr("Outras páxinas sen revisar", "Otras páginas sin revisar")
+                    failed == toCheck -> tr("Non se puideron revisar as outras páxinas", "No se pudieron revisar las otras páginas")
+                    else -> tr("Non aparece no texto doutras páxinas", "No aparece en el texto de otras páginas")
+                },
                 style = MaterialTheme.typography.labelMedium, color = muted,
             )
-        } else {
-            Text(tr("Páxinas", "Páginas"), style = MaterialTheme.typography.labelMedium, color = muted)
-            pages.keys.sorted().forEach { p ->
-                val count = pages.getValue(p)
-                val here = p == current
-                FilterChip(
-                    selected = here,
-                    onClick = { if (!here) onOpen(p) },
-                    label = { Text("$p", style = MaterialTheme.typography.labelLarge) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
-                    modifier = Modifier.semantics {
-                        contentDescription = if (count == 1) tr("Páxina $p, 1 coincidencia", "Página $p, 1 coincidencia")
-                            else tr("Páxina $p, $count coincidencias", "Página $p, $count coincidencias")
-                        if (here) stateDescription = tr("Aberta", "Abierta")
-                    },
-                )
+            else -> {
+                Text(tr("Páxinas", "Páginas"), style = MaterialTheme.typography.labelMedium, color = muted)
+                pages.keys.sorted().forEach { p ->
+                    val count = pages.getValue(p)
+                    val here = p == current
+                    FilterChip(
+                        selected = here,
+                        onClick = { if (!here) onOpen(p) },
+                        label = { Text("$p", style = MaterialTheme.typography.labelLarge) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                        modifier = Modifier.semantics {
+                            contentDescription = when (count) {
+                                0 -> tr("Páxina $p", "Página $p")
+                                1 -> tr("Páxina $p, 1 coincidencia", "Página $p, 1 coincidencia")
+                                else -> tr("Páxina $p, $count coincidencias", "Página $p, $count coincidencias")
+                            }
+                            if (here) stateDescription = tr("Aberta", "Abierta")
+                        },
+                    )
+                }
             }
         }
         if (scanning && pages.isNotEmpty()) {
             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = muted)
             Text("$checked / $toCheck", style = MaterialTheme.typography.labelSmall, color = muted)
         }
-        if (!scanning && failed > 0) TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) {
+        if (!scanned && pageCount > 1) TextButton(onClick = onScanAll, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text(tr("Revisar todo o documento", "Revisar todo el documento"))
+        }
+        if (scanned && !scanning && failed > 0) TextButton(onClick = onScanAll, modifier = Modifier.heightIn(min = 48.dp)) {
             Text(if (failed == 1) tr("1 sen revisar · Reintentar", "1 sin revisar · Reintentar")
                 else tr("$failed sen revisar · Reintentar", "$failed sin revisar · Reintentar"))
         }
-        if (!scanning && failed == 0 && toCheck < pageCount) Text(
+        if (scanned && !scanning && failed == 0 && toCheck < pageCount) Text(
             tr("· revisadas $toCheck de $pageCount", "· revisadas $toCheck de $pageCount"),
             style = MaterialTheme.typography.labelSmall, color = muted,
         )

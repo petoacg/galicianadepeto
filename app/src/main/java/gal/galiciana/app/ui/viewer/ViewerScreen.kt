@@ -187,6 +187,8 @@ fun ViewerScreen(
     var pagesChecked by remember(path) { mutableIntStateOf(0) }
     var pagesToCheck by remember(path) { mutableIntStateOf(0) }
     var pagesFailed by remember(path) { mutableIntStateOf(0) }
+    // 0 until the reader asks to read the rest of the document; never automatic.
+    var scanRequest by remember(path) { mutableIntStateOf(0) }
     var landOnLastMatch by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var metadataRetry by remember(path) { mutableIntStateOf(0) }
@@ -291,20 +293,26 @@ fun ViewerScreen(
         finding = false
     }
 
-    // The query is read on the other pages too, so the reader can go from match to
-    // match across the document instead of paging blind.
-    LaunchedEffect(path, committedQuery, pageCount, searchRequest) {
-        matchPages = emptyMap()
+    // Pages with matches come first from the search results, which already named them:
+    // entering the viewer downloads nothing but the open page. Reading the rest of the
+    // document is the reader's choice (scanRequest), done two pages at a time and with
+    // the text matching off the main thread, so the page being read stays smooth.
+    LaunchedEffect(path, committedQuery) {
+        scanRequest = 0
+        pagesChecked = 0
+        pagesToCheck = 0
+        pagesFailed = 0
+        matchPages = SearchPageHints.pages(path, committedQuery).associateWith { 0 }
+    }
+    LaunchedEffect(scanRequest) {
+        if (scanRequest == 0) return@LaunchedEffect
         pagesChecked = 0
         pagesFailed = 0
         val q = highlightTerms(committedQuery)
-        if (q.isBlank() || pageCount == 0) {
-            pagesToCheck = 0
-            return@LaunchedEffect
-        }
+        if (q.isBlank() || pageCount == 0) return@LaunchedEffect
         val order = issueScanOrder(currentPos, pageCount)
         pagesToCheck = order.size
-        val gate = Semaphore(4)
+        val gate = Semaphore(2)
         coroutineScope {
             order.forEach { pos ->
                 launch {
@@ -321,7 +329,7 @@ fun ViewerScreen(
                         if (text == null) pagesFailed++
                         else {
                             ocrCache[key] = text
-                            val count = countMatches(text, q)
+                            val count = withContext(Dispatchers.Default) { countMatches(text, q) }
                             if (count > 0) matchPages = matchPages + (pos to count)
                         }
                         pagesChecked++
@@ -698,15 +706,16 @@ fun ViewerScreen(
                         Icon(Icons.Filled.Edit, tr("Editar a busca", "Editar la búsqueda"))
                     }
                 }
-                if (pagesToCheck > 0) MatchPagesRow(
+                MatchPagesRow(
                     pages = matchPages,
                     current = currentPos,
                     checked = pagesChecked,
                     toCheck = pagesToCheck,
                     failed = pagesFailed,
                     pageCount = pageCount,
+                    scanned = scanRequest > 0,
                     onOpen = { currentPos = it },
-                    onRetry = { searchRequest++ },
+                    onScanAll = { scanRequest++ },
                 )
                 searchStatus?.let { message ->
                     Text(message, style = MaterialTheme.typography.bodySmall,

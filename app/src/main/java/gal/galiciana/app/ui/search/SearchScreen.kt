@@ -200,6 +200,14 @@ fun SearchScreen(
         pickedResults = if (key in pickedResults) pickedResults - key else pickedResults + (key to hit)
     }
     val qTerm = vm.submittedQuery
+    // Opening a page also hands the viewer the other pages of that document that these
+    // results already found, so it can list them without downloading the document.
+    val openHitWithPages: (String, Int, String, String?) -> Unit = { p, pos, q, img ->
+        val known = (vm.hits + vm.variantGroups.flatMap { it.pages } + vm.recoveryGroups.flatMap { it.pages })
+            .filter { it.path == p }.mapNotNull { it.position }.toSet() + pos
+        gal.galiciana.app.ui.viewer.SearchPageHints.remember(p, q, known)
+        onOpenHit(p, pos, q, img)
+    }
     val viewerQuery = qTerm
     val barra = MaterialTheme.colorScheme.primary
     Scaffold(
@@ -384,7 +392,7 @@ fun SearchScreen(
                                     store.rememberOpenedHit(first.copy(savedQuery = viewerQuery))
                                     store.markVisited(favKey(p, first.position ?: 1, group.title))
                                     store.rememberWork(p, group.title, group.parentTitle)
-                                    onOpenHit(p, first.position ?: 1, viewerQuery, first.imageId)
+                                    openHitWithPages(p, first.position ?: 1, viewerQuery, first.imageId)
                                 }
                             },
                         )
@@ -400,7 +408,7 @@ selecting = pickingResults, selected = pickKey(hit) in pickedResults, onSelectTo
                                 hit.path?.let { p ->
                                     store.markVisited(favKey(p, hit.position ?: 1, hit.title))
                                     store.rememberWork(p, hit.title, hit.parentTitle)
-                                    onOpenHit(p, hit.position ?: 1, viewerQuery, hit.imageId)
+                                    openHitWithPages(p, hit.position ?: 1, viewerQuery, hit.imageId)
                                 }
                             } },
                         )
@@ -432,7 +440,7 @@ selecting = pickingResults, selected = pickKey(hit) in pickedResults, onSelectTo
                                 onOpen = {
                                     group.pages.firstOrNull()?.let { hit ->
                                         store.rememberOpenedHit(hit.copy(savedQuery = viewerQuery))
-                                        hit.path?.let { onOpenHit(it, hit.position ?: 1, viewerQuery, hit.imageId) }
+                                        hit.path?.let { openHitWithPages(it, hit.position ?: 1, viewerQuery, hit.imageId) }
                                     }
                                 })
                         }
@@ -443,7 +451,7 @@ selecting = pickingResults, selected = pickKey(hit) in pickedResults, onSelectTo
                                 onClick = { if (pickingResults) togglePick(hit) else {
                                     hit.path?.let {
                                         store.markVisited(favKey(it, hit.position ?: 1, hit.title))
-                                        onOpenHit(it, hit.position ?: 1, viewerQuery, hit.imageId)
+                                        openHitWithPages(it, hit.position ?: 1, viewerQuery, hit.imageId)
                                     }
                                 } })
                         }
@@ -469,7 +477,7 @@ selecting = pickingResults, selected = pickKey(hit) in pickedResults, onSelectTo
                                 onOpen = {
                                     group.pages.firstOrNull()?.let { hit ->
                                         store.rememberOpenedHit(hit.copy(savedQuery = viewerQuery))
-                                        hit.path?.let { onOpenHit(it, hit.position ?: 1, viewerQuery, hit.imageId) }
+                                        hit.path?.let { openHitWithPages(it, hit.position ?: 1, viewerQuery, hit.imageId) }
                                     }
                                 })
                         }
@@ -480,7 +488,7 @@ selecting = pickingResults, selected = pickKey(hit) in pickedResults, onSelectTo
                                 onClick = { if (pickingResults) togglePick(hit) else {
                                     hit.path?.let {
                                         store.markVisited(favKey(it, hit.position ?: 1, hit.title))
-                                        onOpenHit(it, hit.position ?: 1, viewerQuery, hit.imageId)
+                                        openHitWithPages(it, hit.position ?: 1, viewerQuery, hit.imageId)
                                     }
                                 } })
                         }
