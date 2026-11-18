@@ -115,6 +115,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import androidx.compose.foundation.layout.offset
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.Alignment
@@ -197,7 +199,17 @@ fun ViewerScreen(
     LaunchedEffect(path, metadataRetry) {
         loading = true
         error = null
-        runCatching { withContext(Dispatchers.IO) { metsRepo.load(path) } }
+        // Galiciana sometimes fails the first request of a session; without this list the
+        // viewer cannot know there are other pages, so it tries again before giving up.
+        var attempt = 0
+        var result: Result<gal.galiciana.app.domain.MetsDocument>
+        while (true) {
+            result = runCatching { withContext(Dispatchers.IO) { metsRepo.load(path) } }
+            if (result.isSuccess || attempt >= 2) break
+            attempt++
+            delay(700L * attempt)
+        }
+        result
             .onSuccess { loaded ->
                 doc = loaded
                 val wanted = seedImageId
@@ -215,6 +227,27 @@ fun ViewerScreen(
     val imageId = page?.imageId ?: seedImageId
     val imageUrl = imageId?.let { GalicianaUrls.jpeg(it) }
     val pageCount = pages.size
+    // The page asked for opens on its own, with nothing else downloading beside it. Only
+    // once it is on screen, and after a short pause for its marks to load, are its two
+    // neighbours read ahead, one at a time: first the one in the reading direction.
+    var shownPage by remember(path) { mutableIntStateOf(0) }
+    var readingDirection by remember(path) { mutableIntStateOf(1) }
+    LaunchedEffect(currentPos) {
+        if (shownPage != 0 && currentPos != shownPage)
+            readingDirection = if (currentPos > shownPage) 1 else -1
+    }
+    LaunchedEffect(shownPage) {
+        if (shownPage == 0) return@LaunchedEffect
+        delay(800)
+        listOf(shownPage + readingDirection, shownPage - readingDirection)
+            .filter { it in 1..pageCount }
+            .forEach { pos ->
+                val id = pages.firstOrNull { it.position == pos }?.imageId ?: return@forEach
+                try { readAheadPage(path, pos, id) }
+                catch (e: CancellationException) { throw e }
+                catch (_: Exception) { }
+            }
+    }
     val ocrCache = remember(path) { mutableMapOf<String, String>() }
     val altoCache = remember(path) {
         mutableMapOf<String, AltoSearchResult>()
@@ -267,7 +300,9 @@ fun ViewerScreen(
         val textJob = async {
             try {
                 val text = ocrCache[cacheKey] ?: ocrRepo.loadPage(path, currentPos, imageId).ocrText
-                text to countMatches(text, q)
+                // Counting runs off the screen's thread: on a long page it takes a quarter of
+                // a second, which would stall the page turn that has just started.
+                text to withContext(Dispatchers.Default) { countMatches(text, q) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -621,6 +656,9 @@ fun ViewerScreen(
                     // tap hides them, and the page stays where it is.
                     frameTop = topBarsHeight.toFloat(),
                     frameBottom = topBarsHeight.toFloat(),
+                    canTurn = { step -> (currentPos + step) in 1..pageCount },
+                    onPageShown = { shownPage = it },
+                    neighbourImageId = { step -> pages.firstOrNull { it.position == currentPos + step }?.imageId },
                 )
                 androidx.compose.animation.AnimatedVisibility(!showChrome, enter = chromeIn, exit = chromeOut,
                     modifier = Modifier.align(Alignment.TopEnd)
@@ -963,7 +1001,11 @@ private fun ZoomablePage(
     onSwipePage: (Int) -> Unit = {},
     frameTop: Float = 0f,
     frameBottom: Float = 0f,
+    canTurn: (Int) -> Boolean = { true },
+    onPageShown: (Int) -> Unit = {},
+    neighbourImageId: (Int) -> String? = { null },
 ) {
+    val canTurnNow = androidx.compose.runtime.rememberUpdatedState(canTurn)
     val swipeHandler = androidx.compose.runtime.rememberUpdatedState(onSwipePage)
     if (imageUrl == null) {
         Text(
@@ -977,6 +1019,12 @@ private fun ZoomablePage(
     var offsetY by remember { mutableFloatStateOf(0f) }
     var box by remember { mutableStateOf(IntSize.Zero) }
     var pageBmp by remember(imageUrl) { mutableStateOf<ImageBitmap?>(null) }
+    // A screen-sized copy of the page, ready at once when the page was read ahead or seen
+    // a moment ago: the turn then brings the page itself, and the sharp image replaces it
+    // in place, unnoticed. Without one, a blank sheet stands in.
+    val previewBmp = remember(imageUrl) { PagePreviews.get(imageId.orEmpty()) }
+    val drawnBmp = pageBmp ?: previewBmp
+    var pageFail by remember(imageUrl) { mutableStateOf(false) }
 
     fun applyZoom(old: Float, nextRaw: Float, centroid: Offset, pan: Offset) {
         val next = nextRaw.coerceIn(1f, 8f)
@@ -992,11 +1040,76 @@ private fun ZoomablePage(
         offsetX = offsetX * ratio + (centroid.x - vw / 2f) * (1f - ratio) + pan.x
         offsetY = offsetY * ratio + (centroid.y - pageFrameCenter(vh, frameTop, frameBottom)) * (1f - ratio) + pan.y
         val bounded = constrainPageTransform(vw, vh,
-            pageBmp?.width?.toFloat() ?: vw, pageBmp?.height?.toFloat() ?: vh,
+            drawnBmp?.width?.toFloat() ?: vw, drawnBmp?.height?.toFloat() ?: vh,
             next, offsetX, offsetY, frameTop, frameBottom)
         offsetX = bounded.x
         offsetY = bounded.y
         scale = bounded.scale
+    }
+
+    // Turning a page is one continuous movement, like sliding sheets across a desk: the
+    // page follows the finger, and on release it carries on out while the next sheet comes
+    // in attached to it. Until the new image arrives that sheet is a blank page of the same
+    // shape; the image then fades onto it in place. Nothing jumps and nothing goes black.
+    // With animations off the page simply changes.
+    val motionContext = LocalContext.current
+    val reduceMotion = remember { gal.galiciana.app.ui.theme.motionReduced(motionContext) }
+    val turnScope = rememberCoroutineScope()
+    var dragX by remember { mutableFloatStateOf(0f) }
+    var shownPosition by remember { mutableIntStateOf(position) }
+    // The page on show; on a turn it is drawn leaving for the length of the slide only.
+    var shownBmp by remember { mutableStateOf<ImageBitmap?>(null) }
+    var outgoing by remember { mutableStateOf<ImageBitmap?>(null) }
+    var outgoingScale by remember { mutableFloatStateOf(1f) }
+    var outgoingX by remember { mutableFloatStateOf(0f) }
+    var outgoingY by remember { mutableFloatStateOf(0f) }
+    var turnDir by remember { mutableIntStateOf(0) }
+    var turnStartX by remember { mutableFloatStateOf(0f) }
+    val turn = remember { androidx.compose.animation.core.Animatable(1f) }
+    val reveal = remember { androidx.compose.animation.core.Animatable(1f) }
+    var revealPending by remember { mutableStateOf(false) }
+    var awaitingPage by remember { mutableStateOf(false) }
+    // True only while the image fades onto its blank sheet; read in composition, unlike
+    // the fade itself, so the page is not recomposed on every frame of it.
+    var revealing by remember { mutableStateOf(false) }
+    var pageAspect by remember { mutableFloatStateOf(0.7f) }
+    fun leavingX(width: Float): Float =
+        if (turnDir == 0) 0f else turnStartX + (-turnDir * width - turnStartX) * turn.value
+    fun arrivingX(width: Float): Float =
+        if (turnDir == 0) dragX else leavingX(width) + turnDir * width
+    // Declared before the reset below so it still reads the old page's zoom.
+    LaunchedEffect(position) {
+        if (position == shownPosition) return@LaunchedEffect
+        val direction = if (position > shownPosition) 1 else -1
+        shownPosition = position
+        // The page on show stays the one on show until the next can take its place.
+        val leaving = shownBmp
+        if (reduceMotion || leaving == null || box.width == 0) { dragX = 0f; return@LaunchedEffect }
+        outgoing = leaving
+        outgoingScale = scale; outgoingX = offsetX; outgoingY = offsetY
+        turnStartX = dragX
+        dragX = 0f
+        turnDir = direction
+        revealPending = false
+        try {
+            turn.snapTo(0f)
+            // Not ready yet: the page settles back, a loading bar says why, and the turn
+            // waits for the new page rather than sliding in an empty one.
+            if (previewBmp == null && pageBmp == null && !pageFail) {
+                awaitingPage = true
+                val settle = launch {
+                    androidx.compose.animation.core.animate(turnStartX, 0f,
+                        animationSpec = androidx.compose.animation.core.spring(
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)) { v, _ -> turnStartX = v }
+                }
+                androidx.compose.runtime.snapshotFlow { pageBmp != null || pageFail }
+                    .first { it }
+                settle.cancel()
+                awaitingPage = false
+            }
+            turn.animateTo(1f, androidx.compose.animation.core.tween(300,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing))
+        } finally { outgoing = null; turnDir = 0; awaitingPage = false }
     }
 
     LaunchedEffect(path, position, imageId) {
@@ -1005,52 +1118,8 @@ private fun ZoomablePage(
         offsetY = 0f
     }
 
-    // Turning a page: a screen-sized copy of the old page slides out toward the gesture while
-    // the new one slides in from the other side once its image is ready. The copy, never the
-    // full page, is kept, and only for the 200 ms of the exit. Off when the system says not
-    // to animate; then the page simply changes.
-    val motionContext = LocalContext.current
-    val reduceMotion = remember { gal.galiciana.app.ui.theme.motionReduced(motionContext) }
-    val enter = remember { androidx.compose.animation.core.Animatable(0f) }
-    var shownPosition by remember { mutableIntStateOf(position) }
-    var pendingDirection by remember { mutableIntStateOf(0) }
-    // The page on show. While reading it is the same object as pageBmp, so it costs nothing;
-    // on a turn it outlives pageBmp just long enough to make the small exit copy.
-    var shownBmp by remember { mutableStateOf<ImageBitmap?>(null) }
-    var exitCopy by remember { mutableStateOf<ImageBitmap?>(null) }
-    var exitDirection by remember { mutableIntStateOf(0) }
-    val exit = remember { androidx.compose.animation.core.Animatable(0f) }
-    LaunchedEffect(position) {
-        if (position != shownPosition) {
-            val direction = if (position > shownPosition) 1 else -1
-            pendingDirection = direction
-            shownPosition = position
-            val outgoing = shownBmp
-            shownBmp = null
-            val copy = if (reduceMotion || outgoing == null || box.width == 0 || box.height == 0) null
-                else withContext(Dispatchers.Default) {
-                    val source = outgoing.asAndroidBitmap()
-                    val fit = pageFit(box.width.toFloat(), box.height.toFloat(), source.width.toFloat(),
-                        source.height.toFloat(), frameTop, frameBottom).coerceAtMost(1f)
-                    android.graphics.Bitmap.createScaledBitmap(source,
-                        (source.width * fit).roundToInt().coerceAtLeast(1),
-                        (source.height * fit).roundToInt().coerceAtLeast(1), true).asImageBitmap()
-                }
-            if (copy != null) {
-                exitCopy = copy
-                exitDirection = direction
-                try {
-                    exit.snapTo(0f)
-                    exit.animateTo(1f, androidx.compose.animation.core.tween(200,
-                        easing = androidx.compose.animation.core.FastOutLinearInEasing))
-                } finally { exitCopy = null }
-            }
-        }
-    }
-
     val pageContext = LocalContext.current
     val budget = remember { pageBudget(pageContext) }
-    var pageFail by remember(imageUrl) { mutableStateOf(false) }
     var preview by remember(imageUrl) { mutableStateOf(false) }
     var imageError by remember(imageUrl) { mutableStateOf<String?>(null) }
     var retry by remember(imageUrl) { mutableIntStateOf(0) }
@@ -1060,7 +1129,9 @@ private fun ZoomablePage(
         imageError = null
         val result = withContext(Dispatchers.IO) {
             runCatching {
-                val page = fetchGalicianaPage(imageUrl, path, position, imageId.orEmpty())
+                val page = PageBytes.getOrAwait(imageId.orEmpty())?.let { PageImage(it, false) }
+                    ?: fetchGalicianaPage(imageUrl, path, position, imageId.orEmpty())
+                        .also { if (!it.preview) PageBytes.put(imageId.orEmpty(), it.bytes) }
                 val bitmap = decodeGalicianaPage(page.bytes, budget) ?: error(UNREADABLE_PAGE)
                 bitmap.asImageBitmap() to page.preview
             }
@@ -1074,19 +1145,33 @@ private fun ZoomablePage(
         }
     }
 
-    LaunchedEffect(pageBmp) { pageBmp?.let { shownBmp = it } }
-    LaunchedEffect(pageBmp) {
-        val direction = pendingDirection
-        if (pageBmp == null || direction == 0) return@LaunchedEffect
-        pendingDirection = 0
-        if (reduceMotion) { enter.snapTo(0f); return@LaunchedEffect }
-        // Whatever interrupts the slide, the page ends where it belongs.
-        try {
-            enter.snapTo(direction * 0.35f)
-            enter.animateTo(0f, androidx.compose.animation.core.tween(200,
-                easing = androidx.compose.animation.core.FastOutSlowInEasing))
-        } finally { enter.snapTo(0f) }
+    LaunchedEffect(previewBmp) {
+        val copy = previewBmp ?: return@LaunchedEffect
+        if (pageBmp == null) shownBmp = copy
+        pageAspect = copy.width.toFloat() / copy.height.coerceAtLeast(1)
+        revealPending = false
     }
+    LaunchedEffect(pageBmp) {
+        val bmp = pageBmp ?: return@LaunchedEffect
+        shownBmp = bmp
+        pageAspect = bmp.width.toFloat() / bmp.height.coerceAtLeast(1)
+        onPageShown(position)
+        // Keep a screen-sized copy, so coming back to this page is instant too.
+        imageId?.takeIf { PagePreviews.get(it) == null }?.let { id ->
+            launch(Dispatchers.Default) { PagePreviews.put(id, screenCopy(bmp.asAndroidBitmap())) }
+        }
+        if (revealPending && !reduceMotion) {
+            revealPending = false
+            revealing = true
+            try {
+                reveal.snapTo(0f)
+                reveal.animateTo(1f, androidx.compose.animation.core.tween(220))
+            } finally { revealing = false }
+        } else { revealPending = false; reveal.snapTo(1f) }
+    }
+    // A wait shorter than this needs no spinner.
+    var slowLoad by remember(imageUrl) { mutableStateOf(false) }
+    LaunchedEffect(imageUrl) { delay(450); slowLoad = true }
 
     // Locator: the page never zooms on its own, so the active match announces itself
     // with an amber halo that pulses a few times when the matches arrive or the reader
@@ -1111,7 +1196,7 @@ private fun ZoomablePage(
         val changed = previousMatch != currentMatch
         previousMatch = currentMatch
         if (!changed || !showHighlights) return@LaunchedEffect
-        val bitmap = pageBmp ?: return@LaunchedEffect
+        val bitmap = drawnBmp ?: return@LaunchedEffect
         val target = matches.getOrNull(currentMatch)?.boxes?.firstOrNull() ?: return@LaunchedEffect
         if (box.width == 0 || box.height == 0 || pageW <= 1f || pageH <= 1f) return@LaunchedEffect
         val focused = focusPageMatch(box.width.toFloat(), box.height.toFloat(),
@@ -1170,6 +1255,7 @@ private fun ZoomablePage(
                     val startScale = scale
                     val startX = offsetX
                     var multi = false
+                    var dragging = false
                     var last = down.position
                     var dx = 0f
                     var dy = 0f
@@ -1181,12 +1267,26 @@ private fun ZoomablePage(
                         dx += change.position.x - last.x
                         dy += change.position.y - last.y
                         last = change.position
+                        // The whole page follows the finger; past the first or last page it
+                        // only gives a little.
+                        if (multi) { if (dragging) { dragging = false; dragX = 0f } }
+                        else if (!reduceMotion && turnDir == 0 && startScale <= 1.02f && scale <= 1.02f &&
+                            (dragging || (kotlin.math.abs(dx) > viewConfiguration.touchSlop && kotlin.math.abs(dx) > kotlin.math.abs(dy)))) {
+                            dragging = true
+                            dragX = if (canTurnNow.value(if (dx < 0) 1 else -1)) dx else dx * 0.25f
+                        }
                     }
                     // Whole page shown, or zoomed in but already at that side's edge: turn the page.
                     val atEdge = scale > 1.02f && kotlin.math.abs(offsetX - startX) < 2f
                     val turns = !multi && kotlin.math.abs(dx) > size.width * 0.22f && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.5f &&
                         ((startScale <= 1.02f && scale <= 1.02f) || atEdge)
-                    if (turns) swipeHandler.value(if (dx < 0) 1 else -1)
+                    val step = if (dx < 0) 1 else -1
+                    if (turns && canTurnNow.value(step)) swipeHandler.value(step)
+                    else if (dragX != 0f) turnScope.launch {
+                        androidx.compose.animation.core.animate(dragX, 0f,
+                            animationSpec = androidx.compose.animation.core.spring(
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)) { v, _ -> dragX = v }
+                    }
                 }
             }
             .pointerInput(path, position) {
@@ -1209,7 +1309,7 @@ private fun ZoomablePage(
         contentAlignment = Alignment.Center
     ) {
         when {
-            pageBmp == null && !pageFail -> LinearProgressIndicator(Modifier.fillMaxWidth(0.4f))
+            drawnBmp == null && !pageFail -> BlankSheet(pageAspect, frameTop, frameBottom, slowLoad) { arrivingX(box.width.toFloat()) }
             pageFail -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(tr("Non se puido abrir a páxina", "No se pudo abrir la página"), color = Color.White)
                 Text(if (imageError == UNREADABLE_PAGE) tr("O ficheiro recibido non é unha imaxe válida.", "El archivo recibido no es una imagen válida.")
@@ -1220,10 +1320,11 @@ private fun ZoomablePage(
                 OutlinedButton(onClick = { retry++ }) { Text("Reintentar") }
             }
             else -> {
-                val bmp = pageBmp
+                val bmp = drawnBmp
+                if (revealing) BlankSheet(pageAspect, frameTop, frameBottom, false) { arrivingX(box.width.toFloat()) }
                 Canvas(Modifier.fillMaxSize().graphicsLayer {
-                    translationX = enter.value * size.width
-                    alpha = 1f - kotlin.math.abs(enter.value) * 1.5f
+                    translationX = arrivingX(size.width)
+                    alpha = reveal.value
                 }) {
                     if (bmp == null) return@Canvas
                     val iw = bmp.width.toFloat().coerceAtLeast(1f)
@@ -1296,16 +1397,40 @@ private fun ZoomablePage(
                 )
             }
         }
-        exitCopy?.let { copy ->
-            Canvas(Modifier.fillMaxSize().graphicsLayer {
-                translationX = -exitDirection * exit.value * size.width
-                alpha = 1f - exit.value
-            }) {
-                val w = copy.width.toFloat()
-                val h = copy.height.toFloat()
-                drawImage(copy, dstOffset = IntOffset(((size.width - w) / 2f).roundToInt(),
-                    (pageFrameCenter(size.height, frameTop, frameBottom) - h / 2f).roundToInt()),
-                    dstSize = IntSize(w.roundToInt(), h.roundToInt()), filterQuality = FilterQuality.Low)
+        if (awaitingPage) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter)
+            .offset { IntOffset(0, (frameTop - 4.dp.toPx()).roundToInt().coerceAtLeast(0)) })
+        // While the finger drags, the neighbouring page shows at the edge, attached.
+        Canvas(Modifier.fillMaxSize()) {
+            val drag = dragX
+            if (turnDir != 0 || drag == 0f) return@Canvas
+            val side = if (drag < 0f) 1 else -1
+            if (!canTurnNow.value(side)) return@Canvas
+            val left = drag + side * size.width
+            val copy = neighbourImageId(side)?.let(PagePreviews::get)
+            val iw = copy?.width?.toFloat() ?: (pageAspect * 1000f)
+            val ih = copy?.height?.toFloat() ?: 1000f
+            val fit = pageFit(size.width, size.height, iw, ih, frameTop, frameBottom)
+            val dw = iw * fit
+            val dh = ih * fit
+            val top = pageFrameCenter(size.height, frameTop, frameBottom) - dh / 2f
+            val x = left + (size.width - dw) / 2f
+            if (copy != null) drawImage(copy, dstOffset = IntOffset(x.roundToInt(), top.roundToInt()),
+                dstSize = IntSize(dw.roundToInt().coerceAtLeast(1), dh.roundToInt().coerceAtLeast(1)),
+                filterQuality = FilterQuality.Low)
+            else drawRect(BlankSheetColor, topLeft = Offset(x, top), size = Size(dw, dh))
+        }
+        outgoing?.let { leavingPage ->
+            Canvas(Modifier.fillMaxSize().graphicsLayer { translationX = leavingX(size.width) }) {
+                val iw = leavingPage.width.toFloat().coerceAtLeast(1f)
+                val ih = leavingPage.height.toFloat().coerceAtLeast(1f)
+                val fit = pageFit(size.width, size.height, iw, ih, frameTop, frameBottom)
+                val dw = iw * fit * outgoingScale
+                val dh = ih * fit * outgoingScale
+                drawImage(leavingPage,
+                    dstOffset = IntOffset(((size.width - dw) / 2f + outgoingX).roundToInt(),
+                        (pageFrameCenter(size.height, frameTop, frameBottom) - dh / 2f + outgoingY).roundToInt()),
+                    dstSize = IntSize(dw.roundToInt().coerceAtLeast(1), dh.roundToInt().coerceAtLeast(1)),
+                    filterQuality = FilterQuality.Low)
             }
         }
     }
@@ -1316,6 +1441,97 @@ private data class PageImage(val bytes: ByteArray, val preview: Boolean)
 // Keep bulk downloads on the same full-image path as the viewer's download button.
 internal suspend fun fetchFullGalicianaPage(path: String, position: Int, imageId: String): ByteArray =
     fetchGalicianaPage(GalicianaUrls.jpeg(imageId), path, position, imageId, allowPreview = false).bytes
+
+/** A page-shaped blank sheet in the page's frame, standing in until the image arrives. */
+@Composable
+private fun BlankSheet(aspect: Float, frameTop: Float, frameBottom: Float, showProgress: Boolean, offsetX: () -> Float) {
+    Box(Modifier.fillMaxSize().graphicsLayer { translationX = offsetX() }, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val fit = pageFit(size.width, size.height, aspect * 1000f, 1000f, frameTop, frameBottom)
+            val w = aspect * 1000f * fit
+            val h = 1000f * fit
+            drawRect(BlankSheetColor, topLeft = Offset((size.width - w) / 2f,
+                pageFrameCenter(size.height, frameTop, frameBottom) - h / 2f), size = Size(w, h))
+        }
+        if (showProgress) LinearProgressIndicator(Modifier.fillMaxWidth(0.4f))
+    }
+}
+
+private val BlankSheetColor = Color(0xFF2E2B27)
+
+/**
+ * The last few pages' files, as downloaded. Going back is then instant, and pages read
+ * ahead are ready when the reader gets there. Files, not decoded images: a few MB each.
+ */
+internal object PageBytes {
+    private val files = object : LinkedHashMap<String, ByteArray>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ByteArray>?) = size > 5
+    }
+    @Synchronized fun get(imageId: String): ByteArray? = if (imageId.isBlank()) null else files[imageId]
+    @Synchronized fun put(imageId: String, bytes: ByteArray) { if (imageId.isNotBlank()) files[imageId] = bytes }
+    private val reading = mutableMapOf<String, kotlinx.coroutines.CompletableDeferred<ByteArray?>>()
+    @Synchronized fun startReading(imageId: String): kotlinx.coroutines.CompletableDeferred<ByteArray?>? =
+        if (imageId in reading || imageId in files) null
+        else kotlinx.coroutines.CompletableDeferred<ByteArray?>().also { reading[imageId] = it }
+    @Synchronized fun finishReading(imageId: String, bytes: ByteArray?) {
+        if (bytes != null) files[imageId] = bytes
+        reading.remove(imageId)?.complete(bytes)
+    }
+    /** The file, if it is at hand or already on its way (then it is awaited, not asked for twice). */
+    suspend fun getOrAwait(imageId: String): ByteArray? {
+        if (imageId.isBlank()) return null
+        val pending = synchronized(this) { files[imageId]?.let { return it }; reading[imageId] }
+        return pending?.await()
+    }
+}
+
+/** Screen-sized copies of the pages around the one being read: about 10 MB each. */
+internal object PagePreviews {
+    private val copies = object : LinkedHashMap<String, ImageBitmap>(4, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ImageBitmap>?) = size > 3
+    }
+    @Synchronized fun get(imageId: String): ImageBitmap? = if (imageId.isBlank()) null else copies[imageId]
+    @Synchronized fun put(imageId: String, copy: ImageBitmap) { if (imageId.isNotBlank()) copies[imageId] = copy }
+}
+
+private const val PREVIEW_LONG_SIDE = 2200
+
+private fun screenCopy(source: android.graphics.Bitmap): ImageBitmap {
+    val ratio = minOf(1f, PREVIEW_LONG_SIDE.toFloat() / maxOf(source.width, source.height))
+    return android.graphics.Bitmap.createScaledBitmap(source,
+        (source.width * ratio).roundToInt().coerceAtLeast(1),
+        (source.height * ratio).roundToInt().coerceAtLeast(1), true).asImageBitmap()
+}
+
+/** Decodes a downloaded page straight to its screen-sized copy, never at full size. */
+private fun decodePreview(bytes: ByteArray): ImageBitmap? {
+    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    val longSide = maxOf(bounds.outWidth, bounds.outHeight)
+    if (longSide <= 0) return null
+    var sample = 1
+    while (longSide / (sample * 2) >= PREVIEW_LONG_SIDE) sample *= 2
+    val decoded = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
+        android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
+    return if (maxOf(decoded.width, decoded.height) > PREVIEW_LONG_SIDE * 1.2f) screenCopy(decoded).also { decoded.recycle() }
+        else decoded.asImageBitmap()
+}
+
+/** Downloads a page in the background if it is not already at hand, with its screen copy. */
+internal suspend fun readAheadPage(path: String, position: Int, imageId: String) {
+    if (imageId.isBlank()) return
+    if (PagePreviews.get(imageId) == null) PageBytes.get(imageId)?.let { bytes ->
+        withContext(Dispatchers.Default) { decodePreview(bytes) }?.let { PagePreviews.put(imageId, it) }
+    }
+    PageBytes.startReading(imageId) ?: return
+    var bytes: ByteArray? = null
+    try {
+        bytes = withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
+            runCatching { fetchGalicianaPage(GalicianaUrls.jpeg(imageId), path, position, imageId, allowPreview = false).bytes }.getOrNull()
+        }
+    } finally { PageBytes.finishReading(imageId, bytes) }
+    bytes?.let { withContext(Dispatchers.Default) { decodePreview(it) } }?.let { PagePreviews.put(imageId, it) }
+}
 
 private suspend fun fetchGalicianaPage(
     url: String, path: String, position: Int, imageId: String, allowPreview: Boolean = true,
