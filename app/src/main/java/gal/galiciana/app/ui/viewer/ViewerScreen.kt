@@ -616,8 +616,11 @@ fun ViewerScreen(
                     onToggleChrome = { showChrome = !showChrome },
                     onHideChrome = { showChrome = false },
                     onSwipePage = { step -> (currentPos + step).takeIf { it in 1..pageCount }?.let { currentPos = it } },
+                    // Centred on the screen, as a full-screen page, and kept clear of the title
+                    // bar. The search rows below may lie over the page's foot while shown; a
+                    // tap hides them, and the page stays where it is.
                     frameTop = topBarsHeight.toFloat(),
-                    frameBottom = bottomBarHeight.toFloat(),
+                    frameBottom = topBarsHeight.toFloat(),
                 )
                 androidx.compose.animation.AnimatedVisibility(!showChrome, enter = chromeIn, exit = chromeOut,
                     modifier = Modifier.align(Alignment.TopEnd)
