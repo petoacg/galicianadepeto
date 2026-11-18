@@ -45,6 +45,8 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Spacer
@@ -326,12 +328,13 @@ fun ViewerScreen(
                         } catch (_: Exception) {
                             null
                         }
-                        if (text == null) pagesFailed++
-                        else {
-                            ocrCache[key] = text
-                            val count = withContext(Dispatchers.Default) { countMatches(text, q) }
-                            if (count > 0) matchPages = matchPages + (pos to count)
-                        }
+                        if (text != null) ocrCache[key] = text
+                        val count = text?.let { withContext(Dispatchers.Default) { countMatches(it, q) } }
+                        // A new query resets the list before this pass is cancelled: a page
+                        // read for the old query must not be counted under the new one.
+                        if (highlightTerms(committedQuery) != q) return@withPermit
+                        if (count == null) pagesFailed++
+                        else if (count > 0) matchPages = matchPages + (pos to count)
                         pagesChecked++
                     }
                 }
@@ -521,6 +524,8 @@ fun ViewerScreen(
         else -> tr("Non se atopou esa expresión nesta páxina. Proba outra palabra ou revisa o texto.", "No se encontró esa expresión en esta página. Prueba otra palabra o revisa el texto.")
     }
 
+    // In full screen, Back first brings the reading controls back; it never leaves the page.
+    BackHandler(enabled = !showChrome) { showChrome = true }
     BackHandler(enabled = searchExpanded && showChrome) {
         keyboard?.hide()
         searchExpanded = false
@@ -562,169 +567,33 @@ fun ViewerScreen(
         }
     }
 
+    // Full screen never moves the page: it always fills the screen, and the reading
+    // controls fade in and out over its margins instead of pushing it up and down.
+    val chromeMotionContext = LocalContext.current
+    val chromeReduceMotion = remember { gal.galiciana.app.ui.theme.motionReduced(chromeMotionContext) }
+    val chromeIn = if (chromeReduceMotion) androidx.compose.animation.EnterTransition.None
+        else androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160))
+    val chromeOut = if (chromeReduceMotion) androidx.compose.animation.ExitTransition.None
+        else androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))
+    var bottomBarHeight by rememberSaveable { mutableIntStateOf(0) }
+    // The page's frame is measured with the controls in view and kept while they are hidden,
+    // and across a restore, so full screen only adds margin around the page. Only the title
+    // bar counts at the top: an error notice or the open search form are passing panels
+    // over the page, not part of its frame.
+    var topBarsHeight by rememberSaveable { mutableIntStateOf(0) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        // The page bar already clears the system buttons; without it the snackbar must.
-        snackbarHost = { SnackbarHost(snackbar, if (showChrome && !searchExpanded) Modifier
+        // The snackbar sits above the page bar when it shows, above the system buttons otherwise.
+        snackbarHost = { SnackbarHost(snackbar, if (showChrome && !searchExpanded)
+            Modifier.padding(bottom = with(density) { bottomBarHeight.toDp() })
             else Modifier.windowInsetsPadding(WindowInsets.navigationBars)) },
-        topBar = {
-            if (showChrome) TopAppBar(
-                title = {
-                    // The bar has a fixed height; two lines at 200 % would clip the page line.
-                    gal.galiciana.app.ui.CappedFontScale { Column {
-                        Text(publicationTitle.ifBlank { "Documento" },
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(listOfNotNull(
-                                if (pageCount > 0) tr("Páxina $currentPos de $pageCount", "Página $currentPos de $pageCount") else tr("Páxina $currentPos", "Página $currentPos"),
-                                if (fav && hasNote) tr("Gardada con nota", "Guardada con nota") else if (fav) tr("Gardada", "Guardada") else null,
-                            ).joinToString(" · "),
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
-                    }
-                },
-                actions = {
-                    gal.galiciana.app.ui.VieiraButton(selected = fav, size = 24.dp, onClick = { toggleFavorite() })
-                    IconButton(onClick = { searchExpanded = !searchExpanded }) {
-                        Icon(Icons.Filled.Search, if (searchExpanded) tr("Pregar a busca", "Plegar la búsqueda") else tr("Buscar no documento", "Buscar en el documento"))
-                    }
-                    IconButton(onClick = { showPageActions = true }) {
-                        Icon(Icons.Filled.MoreVert, tr("Accións desta páxina", "Acciones de esta página"))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
-            )
-        },
-        bottomBar = {
-            if (showChrome && !searchExpanded) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).heightIn(min = 56.dp).padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = { if (currentPos > 1) currentPos-- },
-                        modifier = Modifier.weight(1f), enabled = !loading && currentPos > 1) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null)
-                        Text("Anterior")
-                    }
-                    TextButton(onClick = { goToText = ""; goToPage = true }, enabled = pageCount > 1,
-                        modifier = Modifier.semantics {
-                            contentDescription = tr("Páxina $currentPos de ${if (pageCount > 0) pageCount.toString() else "total pendente"}", "Página $currentPos de ${if (pageCount > 0) pageCount.toString() else "total pendiente"}")
-                        }, colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                            disabledContentColor = MaterialTheme.colorScheme.onSurface)) {
-                        Text(if (pageCount > 0) "$currentPos / $pageCount" else "$currentPos / …",
-                            style = MaterialTheme.typography.labelLarge)
-                    }
-                    TextButton(onClick = { if (currentPos < pageCount) currentPos++ },
-                        modifier = Modifier.weight(1f), enabled = !loading && pageCount > 0 && currentPos < pageCount) {
-                        Text(tr("Seguinte", "Siguiente"))
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
-                    }
-                }
-            }
-        },
-    ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()
-            .windowInsetsPadding(WindowInsets.navigationBars.only(
-                if (showChrome && searchExpanded) WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
-                else WindowInsetsSides.Horizontal))
-            .imePadding()) {
-            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-            error?.takeIf { imageId != null }?.let {
-                Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(it, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { metadataRetry++ }) { Text("Reintentar") }
-                }
-            }
-            if (showChrome && searchExpanded) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = findQuery,
-                            onValueChange = { findQuery = it },
-                            modifier = Modifier.weight(1f),
-                            label = { Text(tr("Buscar no documento", "Buscar en el documento")) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            trailingIcon = {
-                                if (findQuery.isNotEmpty()) IconButton(onClick = { findQuery = "" }) {
-                                    Icon(Icons.Filled.Close, tr("Borrar o texto de busca", "Borrar texto de búsqueda"))
-                                }
-                            },
-                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                                imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                                onSearch = { startScan(findQuery) }),
-                        )
-                        androidx.compose.material3.Button(onClick = { startScan(findQuery) },
-                            enabled = findQuery.isNotBlank() && !finding,
-                            modifier = Modifier.heightIn(min = 48.dp)) { Text("Buscar") }
-                    }
-                    if (committedQuery.isNotBlank()) TextButton(onClick = {
-                        committedQuery = ""
-                        findQuery = ""
-                        altoMatches = emptyList()
-                        hitAt = 0
-                        ocrMatchCount = 0
-                        finding = false
-                        searchExpanded = false
-                    }) { Text(tr("Quitar busca e marcas", "Quitar búsqueda y marcas")) }
-                }
-            }
-            if (showChrome && !searchExpanded && committedQuery.isNotBlank()) {
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 16.dp, end = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f).heightIn(min = 48.dp).clickable(role = Role.Button,
-                        onClickLabel = tr("Editar busca", "Editar búsqueda"), onClick = { searchExpanded = true })
-                        .padding(vertical = 6.dp)) {
-                        Text(committedQuery, style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(hitLabel, style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                    }
-                    if (altoMatches.isNotEmpty() || otherMatchPages) {
-                        IconButton(onClick = { goPrevHit() }, enabled = !locating) {
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, tr("Coincidencia anterior", "Coincidencia anterior"))
-                        }
-                        IconButton(onClick = { goNextHit() }, enabled = !locating) {
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, tr("Seguinte coincidencia", "Siguiente coincidencia"))
-                        }
-                    } else if (!finding && (altoStatus == AltoStatus.UNAVAILABLE || ocrFailed)) {
-                        TextButton(onClick = { startScan(committedQuery) }) { Text("Reintentar") }
-                    }
-                    IconButton(onClick = { searchExpanded = !searchExpanded }) {
-                        Icon(Icons.Filled.Edit, tr("Editar a busca", "Editar la búsqueda"))
-                    }
-                }
-                MatchPagesRow(
-                    pages = matchPages,
-                    current = currentPos,
-                    checked = pagesChecked,
-                    toCheck = pagesToCheck,
-                    failed = pagesFailed,
-                    pageCount = pageCount,
-                    scanned = scanRequest > 0,
-                    onOpen = { currentPos = it },
-                    onScanAll = { scanRequest++ },
-                )
-                searchStatus?.let { message ->
-                    Text(message, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            }
-            Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+    ) { _ ->
+        // The controls lie over the page, so TalkBack is told the reading order outright:
+        // title bar, page, then the search and page bar.
+        Box(Modifier.fillMaxSize().semantics { isTraversalGroup = true }) {
+            Box(Modifier.fillMaxSize().clipToBounds()) {
                 if (imageId == null) Column(Modifier.align(Alignment.Center).padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -747,13 +616,178 @@ fun ViewerScreen(
                     onToggleChrome = { showChrome = !showChrome },
                     onHideChrome = { showChrome = false },
                     onSwipePage = { step -> (currentPos + step).takeIf { it in 1..pageCount }?.let { currentPos = it } },
+                    frameTop = topBarsHeight.toFloat(),
+                    frameBottom = bottomBarHeight.toFloat(),
                 )
-                if (!showChrome) Box(Modifier.align(Alignment.TopEnd)
-                    .windowInsetsPadding(WindowInsets.statusBars).padding(12.dp)) {
+                androidx.compose.animation.AnimatedVisibility(!showChrome, enter = chromeIn, exit = chromeOut,
+                    modifier = Modifier.align(Alignment.TopEnd)
+                        .windowInsetsPadding(WindowInsets.statusBars).padding(12.dp)) {
                     IconButton(onClick = { showChrome = true }, modifier = Modifier
                         .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))) {
                         Icon(Icons.Filled.FullscreenExit, tr("Mostrar controis de lectura", "Mostrar controles de lectura"))
                     }
+                }
+            }
+            androidx.compose.animation.AnimatedVisibility(showChrome, enter = chromeIn, exit = chromeOut,
+                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().semantics { traversalIndex = -1f }) {
+                Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)
+                    .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))) {
+                    TopAppBar(
+                        title = {
+                            // The bar has a fixed height; two lines at 200 % would clip the page line.
+                            gal.galiciana.app.ui.CappedFontScale { Column {
+                                Text(publicationTitle.ifBlank { "Documento" },
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(listOfNotNull(
+                                        if (pageCount > 0) tr("Páxina $currentPos de $pageCount", "Página $currentPos de $pageCount") else tr("Páxina $currentPos", "Página $currentPos"),
+                                        if (fav && hasNote) tr("Gardada con nota", "Guardada con nota") else if (fav) tr("Gardada", "Guardada") else null,
+                                    ).joinToString(" · "),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } }
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
+                            }
+                        },
+                        actions = {
+                            gal.galiciana.app.ui.VieiraButton(selected = fav, size = 24.dp, onClick = { toggleFavorite() })
+                            IconButton(onClick = { searchExpanded = !searchExpanded }) {
+                                Icon(Icons.Filled.Search, if (searchExpanded) tr("Pregar a busca", "Plegar la búsqueda") else tr("Buscar no documento", "Buscar en el documento"))
+                            }
+                            IconButton(onClick = { showPageActions = true }) {
+                                Icon(Icons.Filled.MoreVert, tr("Accións desta páxina", "Acciones de esta página"))
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+                        modifier = Modifier.onSizeChanged { topBarsHeight = it.height },
+                    )
+                    error?.takeIf { imageId != null }?.let {
+                        Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(it, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { metadataRetry++ }) { Text("Reintentar") }
+                        }
+                    }
+                    if (searchExpanded) {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = findQuery,
+                                    onValueChange = { findQuery = it },
+                                    modifier = Modifier.weight(1f),
+                                    label = { Text(tr("Buscar no documento", "Buscar en el documento")) },
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(12.dp),
+                                    trailingIcon = {
+                                        if (findQuery.isNotEmpty()) IconButton(onClick = { findQuery = "" }) {
+                                            Icon(Icons.Filled.Close, tr("Borrar o texto de busca", "Borrar texto de búsqueda"))
+                                        }
+                                    },
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                        imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                        onSearch = { startScan(findQuery) }),
+                                )
+                                androidx.compose.material3.Button(onClick = { startScan(findQuery) },
+                                    enabled = findQuery.isNotBlank() && !finding,
+                                    modifier = Modifier.heightIn(min = 48.dp)) { Text("Buscar") }
+                            }
+                            if (committedQuery.isNotBlank()) TextButton(onClick = {
+                                committedQuery = ""
+                                findQuery = ""
+                                altoMatches = emptyList()
+                                hitAt = 0
+                                ocrMatchCount = 0
+                                finding = false
+                                searchExpanded = false
+                            }) { Text(tr("Quitar busca e marcas", "Quitar búsqueda y marcas")) }
+                        }
+                    }
+                    if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                }
+            }
+            if (!showChrome && loading) LinearProgressIndicator(Modifier.fillMaxWidth()
+                .align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.statusBars))
+            androidx.compose.animation.AnimatedVisibility(showChrome && !searchExpanded, enter = chromeIn, exit = chromeOut,
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().semantics { traversalIndex = 1f }) {
+                Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)
+                    .onSizeChanged { bottomBarHeight = it.height }) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    // The search and its results sit with the page bar, below the page, so the
+                    // top keeps only the title and the page rests high on the screen.
+                    if (committedQuery.isNotBlank()) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 16.dp, end = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f).heightIn(min = 48.dp).clickable(role = Role.Button,
+                                onClickLabel = tr("Editar busca", "Editar búsqueda"), onClick = { searchExpanded = true })
+                                .padding(vertical = 6.dp)) {
+                                Text(committedQuery, style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(hitLabel, style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                            }
+                            if (altoMatches.isNotEmpty() || otherMatchPages) {
+                                IconButton(onClick = { goPrevHit() }, enabled = !locating) {
+                                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, tr("Coincidencia anterior", "Coincidencia anterior"))
+                                }
+                                IconButton(onClick = { goNextHit() }, enabled = !locating) {
+                                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, tr("Seguinte coincidencia", "Siguiente coincidencia"))
+                                }
+                            } else if (!finding && (altoStatus == AltoStatus.UNAVAILABLE || ocrFailed)) {
+                                TextButton(onClick = { startScan(committedQuery) }) { Text("Reintentar") }
+                            }
+                            IconButton(onClick = { searchExpanded = !searchExpanded }) {
+                                Icon(Icons.Filled.Edit, tr("Editar a busca", "Editar la búsqueda"))
+                            }
+                        }
+                        MatchPagesRow(
+                            pages = matchPages,
+                            current = currentPos,
+                            checked = pagesChecked,
+                            toCheck = pagesToCheck,
+                            failed = pagesFailed,
+                            pageCount = pageCount,
+                            scanned = scanRequest > 0,
+                            onOpen = { currentPos = it },
+                            onScanAll = { scanRequest++ },
+                        )
+                        searchStatus?.let { message ->
+                            Text(message, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                    Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).heightIn(min = 56.dp).padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = { if (currentPos > 1) currentPos-- },
+                            modifier = Modifier.weight(1f), enabled = !loading && currentPos > 1) {
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null)
+                            Text("Anterior")
+                        }
+                        TextButton(onClick = { goToText = ""; goToPage = true }, enabled = pageCount > 1,
+                            modifier = Modifier.semantics {
+                                contentDescription = tr("Páxina $currentPos de ${if (pageCount > 0) pageCount.toString() else "total pendente"}", "Página $currentPos de ${if (pageCount > 0) pageCount.toString() else "total pendiente"}")
+                            }, colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                disabledContentColor = MaterialTheme.colorScheme.onSurface)) {
+                            Text(if (pageCount > 0) "$currentPos / $pageCount" else "$currentPos / …",
+                                style = MaterialTheme.typography.labelLarge)
+                        }
+                        TextButton(onClick = { if (currentPos < pageCount) currentPos++ },
+                            modifier = Modifier.weight(1f), enabled = !loading && pageCount > 0 && currentPos < pageCount) {
+                            Text(tr("Seguinte", "Siguiente"))
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
+                        }
+                    }
+
                 }
             }
         }
@@ -924,6 +958,8 @@ private fun ZoomablePage(
     onToggleChrome: () -> Unit = {},
     onHideChrome: () -> Unit = {},
     onSwipePage: (Int) -> Unit = {},
+    frameTop: Float = 0f,
+    frameBottom: Float = 0f,
 ) {
     val swipeHandler = androidx.compose.runtime.rememberUpdatedState(onSwipePage)
     if (imageUrl == null) {
@@ -951,10 +987,10 @@ private fun ZoomablePage(
         val vh = box.height.toFloat().coerceAtLeast(1f)
         val ratio = next / old.coerceAtLeast(0.01f)
         offsetX = offsetX * ratio + (centroid.x - vw / 2f) * (1f - ratio) + pan.x
-        offsetY = offsetY * ratio + (centroid.y - vh / 2f) * (1f - ratio) + pan.y
+        offsetY = offsetY * ratio + (centroid.y - pageFrameCenter(vh, frameTop, frameBottom)) * (1f - ratio) + pan.y
         val bounded = constrainPageTransform(vw, vh,
             pageBmp?.width?.toFloat() ?: vw, pageBmp?.height?.toFloat() ?: vh,
-            next, offsetX, offsetY)
+            next, offsetX, offsetY, frameTop, frameBottom)
         offsetX = bounded.x
         offsetY = bounded.y
         scale = bounded.scale
@@ -991,7 +1027,8 @@ private fun ZoomablePage(
             val copy = if (reduceMotion || outgoing == null || box.width == 0 || box.height == 0) null
                 else withContext(Dispatchers.Default) {
                     val source = outgoing.asAndroidBitmap()
-                    val fit = min(box.width.toFloat() / source.width, box.height.toFloat() / source.height).coerceAtMost(1f)
+                    val fit = pageFit(box.width.toFloat(), box.height.toFloat(), source.width.toFloat(),
+                        source.height.toFloat(), frameTop, frameBottom).coerceAtMost(1f)
                     android.graphics.Bitmap.createScaledBitmap(source,
                         (source.width * fit).roundToInt().coerceAtLeast(1),
                         (source.height * fit).roundToInt().coerceAtLeast(1), true).asImageBitmap()
@@ -1075,7 +1112,7 @@ private fun ZoomablePage(
         val target = matches.getOrNull(currentMatch)?.boxes?.firstOrNull() ?: return@LaunchedEffect
         if (box.width == 0 || box.height == 0 || pageW <= 1f || pageH <= 1f) return@LaunchedEffect
         val focused = focusPageMatch(box.width.toFloat(), box.height.toFloat(),
-            bitmap.width.toFloat(), bitmap.height.toFloat(), pageW, pageH, target, scale)
+            bitmap.width.toFloat(), bitmap.height.toFloat(), pageW, pageH, target, scale, frameTop, frameBottom)
         scale = focused.scale
         offsetX = focused.x
         offsetY = focused.y
@@ -1188,11 +1225,11 @@ private fun ZoomablePage(
                     if (bmp == null) return@Canvas
                     val iw = bmp.width.toFloat().coerceAtLeast(1f)
                     val ih = bmp.height.toFloat().coerceAtLeast(1f)
-                    val fit = min(size.width / iw, size.height / ih)
+                    val fit = pageFit(size.width, size.height, iw, ih, frameTop, frameBottom)
                     val dw = iw * fit * scale
                     val dh = ih * fit * scale
                     val ox = (size.width - dw) / 2f + offsetX
-                    val oy = (size.height - dh) / 2f + offsetY
+                    val oy = pageFrameCenter(size.height, frameTop, frameBottom) - dh / 2f + offsetY
                     drawImage(
                         image = bmp,
                         dstOffset = IntOffset(ox.roundToInt(), oy.roundToInt()),
@@ -1212,12 +1249,12 @@ private fun ZoomablePage(
                             val p = locatorPulse.value
                             // The pulse widens and fades; the resting ring only matters while the page is small.
                             if (p < 1f) drawCircle(
-                                color = Color(0xFFFFC54D).copy(alpha = 0.85f * (1f - p)),
+                                color = gal.galiciana.app.ui.MatchAmberCurrent.copy(alpha = 0.85f * (1f - p)),
                                 radius = base + p * 44.dp.toPx(), center = Offset(cx, cy),
                                 style = Stroke(width = 3.dp.toPx()),
                             )
                             if (scale < 1.6f) drawCircle(
-                                color = Color(0xFFFFC54D).copy(alpha = 0.7f),
+                                color = gal.galiciana.app.ui.MatchAmberCurrent.copy(alpha = 0.7f),
                                 radius = base, center = Offset(cx, cy),
                                 style = Stroke(width = 2.dp.toPx()),
                             )
@@ -1230,12 +1267,12 @@ private fun ZoomablePage(
                                 val w = (hit.width * sx).coerceAtLeast(2f)
                                 val h = (hit.height * sy).coerceAtLeast(2f)
                                 drawRoundRect(
-                                    color = if (active) Color(0x66FFC54D) else Color(0x40FFE36D),
+                                    color = if (active) gal.galiciana.app.ui.MatchAmberCurrent.copy(alpha = 0.4f) else gal.galiciana.app.ui.MatchAmber.copy(alpha = 0.25f),
                                     topLeft = Offset(left, top), size = Size(w, h),
                                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
                                 )
                                 drawRoundRect(
-                                    color = if (active) Color(0xFF075A9C) else Color(0xFF996700),
+                                    color = if (active) gal.galiciana.app.ui.MatchOutlineCurrent else gal.galiciana.app.ui.MatchOutline,
                                     topLeft = Offset(left, top), size = Size(w, h),
                                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
                                     style = Stroke(width = if (active) 2.5.dp.toPx() else 1.dp.toPx()),
@@ -1263,7 +1300,8 @@ private fun ZoomablePage(
             }) {
                 val w = copy.width.toFloat()
                 val h = copy.height.toFloat()
-                drawImage(copy, dstOffset = IntOffset(((size.width - w) / 2f).roundToInt(), ((size.height - h) / 2f).roundToInt()),
+                drawImage(copy, dstOffset = IntOffset(((size.width - w) / 2f).roundToInt(),
+                    (pageFrameCenter(size.height, frameTop, frameBottom) - h / 2f).roundToInt()),
                     dstSize = IntSize(w.roundToInt(), h.roundToInt()), filterQuality = FilterQuality.Low)
             }
         }

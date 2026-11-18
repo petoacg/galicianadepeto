@@ -10,6 +10,18 @@ import java.text.Normalizer
 
 val HighlightInk = Color(0xFF1A1A1A)
 
+/**
+ * Matches wear one amber everywhere: in OCR text and on the page image. The reader's
+ * current match takes the deeper tone; a possible OCR variant keeps a paler one,
+ * underlined, because it is only a guess.
+ */
+val MatchAmber = Color(0xFFFFE36D)
+val MatchAmberCurrent = Color(0xFFFFC54D)
+val PossibleMatchAmber = Color(0xFFFFE082)
+/** Outlines that keep matches readable on a grey newspaper page. */
+val MatchOutline = Color(0xFF996700)
+val MatchOutlineCurrent = Color(0xFF075A9C)
+
 private val QuoteMarks = charArrayOf('"', '“', '”', '«', '»', '„', '‟', '\'', '‘', '’')
 
 fun stripSearchQuotes(raw: String): String =
@@ -217,7 +229,7 @@ fun highlightQuery(text: String, query: String): AnnotatedString {
             withStyle(
                 SpanStyle(
                     fontWeight = FontWeight.Bold,
-                    background = Color(0xFFFFF59D),
+                    background = MatchAmber,
                     color = HighlightInk,
                 )
             ) { append(m.value) }
@@ -242,7 +254,7 @@ fun highlightPossibleTerms(text: String, query: String): AnnotatedString {
             }
             if (likely) withStyle(SpanStyle(
                 fontWeight = FontWeight.Bold,
-                background = Color(0xFFFFE082),
+                background = PossibleMatchAmber,
                 color = HighlightInk,
                 textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
             )) { append(match.value) }

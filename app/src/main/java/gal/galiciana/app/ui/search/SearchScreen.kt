@@ -182,7 +182,6 @@ fun SearchScreen(
     LaunchedEffect(vm.showingResults) {
         if (vm.showingResults) resultsShown = true else if (resultsShown) formVisited = true
     }
-    BackHandler(enabled = vm.showingResults && formVisited) { vm.showingResults = false }
     val hints = remember { androidContext.getSharedPreferences("ui_hints", android.content.Context.MODE_PRIVATE) }
     var actionsHintSeen by remember { mutableStateOf(hints.getBoolean("result_actions", false)) }
     var sortMenuOpen by remember { mutableStateOf(false) }
@@ -199,12 +198,38 @@ fun SearchScreen(
         val key = pickKey(hit)
         pickedResults = if (key in pickedResults) pickedResults - key else pickedResults + (key to hit)
     }
+    // Filtros opened from results is a step on top of them: Back returns to the results.
+    var formFromResults by rememberSaveable { mutableStateOf(false) }
+    // Undoing Filtros also undoes its mark on the history: the results then go back to
+    // wherever they came from, not to the form that was just closed.
+    var formVisitedBeforeFilters by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(vm.showingResults) { if (vm.showingResults) formFromResults = false }
+    // Back always undoes the latest step: a selection first, then the form or the
+    // results the user came from, and only then leaves the screen.
+    val hasInnerStep = pickingResults ||
+        (vm.showingResults && formVisited) || (!vm.showingResults && formFromResults)
+    fun stepBack() {
+        // The "saved" notice is a message, not a step: it goes away with whatever Back does.
+        bulkSavedNotice = null
+        when {
+            pickingResults -> { pickingResults = false; pickedResults = emptyMap() }
+            !vm.showingResults && formFromResults -> {
+                formFromResults = false
+                formVisited = formVisitedBeforeFilters
+                vm.showingResults = true
+            }
+            vm.showingResults && formVisited -> vm.showingResults = false
+            else -> onBack()
+        }
+    }
+    BackHandler(enabled = hasInnerStep) { stepBack() }
     val qTerm = vm.submittedQuery
     // Opening a page also hands the viewer the other pages of that document that these
     // results already found, so it can list them without downloading the document.
+    // Only exact results count: pages found through a spelling variant or the approximate
+    // search would be listed as holding the query when the viewer cannot mark it there.
     val openHitWithPages: (String, Int, String, String?) -> Unit = { p, pos, q, img ->
-        val known = (vm.hits + vm.variantGroups.flatMap { it.pages } + vm.recoveryGroups.flatMap { it.pages })
-            .filter { it.path == p }.mapNotNull { it.position }.toSet() + pos
+        val known = vm.hits.filter { it.path == p }.mapNotNull { it.position }.toSet() + pos
         gal.galiciana.app.ui.viewer.SearchPageHints.remember(p, q, known)
         onOpenHit(p, pos, q, img)
     }
@@ -219,9 +244,7 @@ fun SearchScreen(
                     else -> "Buscar"
                 },
                 color = barra,
-                onBack = {
-                    if (vm.showingResults && formVisited) vm.showingResults = false else onBack()
-                },
+                onBack = { stepBack() },
                 onHome = onHome,
             )
         }
@@ -265,7 +288,7 @@ fun SearchScreen(
                 if (vm.submittedQuery.isNotBlank() && vm.query != vm.submittedQuery) Text(
                     "Consulta aplicada: ${vm.submittedQuery}", style = MaterialTheme.typography.bodySmall)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(modifier = Modifier.heightIn(min = 48.dp), onClick = { vm.showingResults = false; vm.advanced = true }) {
+                    TextButton(modifier = Modifier.heightIn(min = 48.dp), onClick = { formVisitedBeforeFilters = formVisited; formFromResults = true; vm.showingResults = false; vm.advanced = true }) {
                         Icon(Icons.Filled.Tune, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp)); Text("Filtros")
                     }

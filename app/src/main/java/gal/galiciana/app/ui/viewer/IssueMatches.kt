@@ -96,7 +96,7 @@ internal fun MatchPagesRow(
     val scanning = scanned && checked < toCheck
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).horizontalScroll(rememberScrollState())
             .heightIn(min = 48.dp).padding(start = 16.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),

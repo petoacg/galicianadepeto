@@ -147,6 +147,13 @@ fun FavScreen(
     val scope = rememberCoroutineScope()
     val storageNotice = remember(hits) { store.favoritesStorageNotice() }
 
+    // Back undoes the latest step here too: end a selection, then leave an open folder,
+    // before the tab itself is left.
+    androidx.activity.compose.BackHandler(enabled = selecting || openFolder != null) {
+        if (selecting) { selecting = false; picked = emptySet() }
+        else { openFolder = null; scope.launch { listState.scrollToItem(0) } }
+    }
+
     fun saveBrowsePosition() {
         store.saveFavoritesBrowse(org.json.JSONObject().apply {
             put("folder", openFolder.orEmpty())

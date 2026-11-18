@@ -61,12 +61,25 @@ fun HemerotecaScreen(onHome: () -> Unit, onConsulta: () -> Unit, onDatos: () -> 
     var chooseLetter by rememberSaveable { mutableStateOf(false) }
     var yearQuery by rememberSaveable { mutableStateOf("") }
     val indexList = androidx.compose.foundation.lazy.rememberLazyListState()
+    // The index as it stood before a title search, so leaving the search lands on that
+    // same letter and place instead of the start of the index.
+    var preSearchIndex by remember { mutableStateOf<IndiceCabeceras?>(null) }
+    var preSearchUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var preSearchLetter by rememberSaveable { mutableStateOf<String?>(null) }
+    var preSearchItem by rememberSaveable { mutableIntStateOf(0) }
+    var preSearchOffset by rememberSaveable { mutableIntStateOf(0) }
     val issueList = androidx.compose.foundation.lazy.rememberLazyListState()
 
-    fun loadIndex(url: String? = null, searching: Boolean = false, resetScroll: Boolean = true) {
+    fun loadIndex(url: String? = null, searching: Boolean = false, resetScroll: Boolean = true,
+                  scrollTo: Pair<Int, Int>? = null) {
         val request = ++generation
         task?.cancel()
         retryIndexUrl = url
+        if (searching && submittedQuery.isBlank()) {
+            preSearchIndex = index.takeIf { it.cabeceras.isNotEmpty() }
+            preSearchUrl = sourceUrl; preSearchLetter = selectedLetter
+            preSearchItem = indexList.firstVisibleItemIndex; preSearchOffset = indexList.firstVisibleItemScrollOffset
+        }
         if (searching) { keyboard?.hide(); submittedQuery = query.trim(); sourceUrl = null; selectedLetter = null
             index = IndiceCabeceras(emptyList(), emptyList(), index.letras) }
         task = scope.launch {
@@ -79,7 +92,8 @@ fun HemerotecaScreen(onHome: () -> Unit, onConsulta: () -> Unit, onDatos: () -> 
                         cabeceras = result.cabeceras.filter { repo.matches(it.title, submittedQuery) })
                     sourceUrl = result.sourceUrl
                     selectedLetter = result.selectedLetter
-                    if (resetScroll) indexList.scrollToItem(0)
+                    if (scrollTo != null) indexList.scrollToItem(scrollTo.first, scrollTo.second)
+                    else if (resetScroll) indexList.scrollToItem(0)
                 }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { if (generation == request) error = tr("Non se puideron cargar as publicacións. Comproba a conexión e téntao de novo.", "No se pudieron cargar las publicaciones. Comprueba la conexión y reintenta.") }
@@ -110,13 +124,28 @@ fun HemerotecaScreen(onHome: () -> Unit, onConsulta: () -> Unit, onDatos: () -> 
         openedId = c.id; openedTitle = c.title; years = emptyList(); year = null; month = null
         loadIssues(c.id)
     }
+    /** Leaves a title search for the letter and place the reader searched from. */
+    fun leaveTitleSearch() {
+        query = ""; submittedQuery = ""
+        val saved = preSearchIndex
+        val place = preSearchItem to preSearchOffset
+        preSearchIndex = null
+        if (saved != null) {
+            generation++; task?.cancel(); loading = false; error = null
+            index = saved; sourceUrl = preSearchUrl; selectedLetter = preSearchLetter
+            scope.launch { indexList.scrollToItem(place.first, place.second) }
+        } else loadIndex(preSearchUrl, scrollTo = place)
+    }
     fun back() {
         if (openedId != null) {
             generation++; task?.cancel(); openedId = null; loading = false; error = null
             if (index.cabeceras.isEmpty()) loadIndex(sourceUrl, resetScroll = false)
+        } else if (submittedQuery.isNotBlank()) {
+            // A title search is a step over the alphabetical index: Back returns to it.
+            leaveTitleSearch()
         } else onHome()
     }
-    BackHandler(enabled = openedId != null) { back() }
+    BackHandler(enabled = openedId != null || submittedQuery.isNotBlank()) { back() }
     LaunchedEffect(Unit) {
         val id = openedId
         if (id != null) loadIssues(id, restore = true)
@@ -169,7 +198,7 @@ fun HemerotecaScreen(onHome: () -> Unit, onConsulta: () -> Unit, onDatos: () -> 
                     if (submittedQuery.isNotBlank()) Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(tr("Título: $submittedQuery", "Título: $submittedQuery"), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                         TextButton(modifier = Modifier.heightIn(min = 48.dp), onClick = {
-                            query = ""; submittedQuery = ""; sourceUrl = null; loadIndex()
+                            leaveTitleSearch()
                         }) { Text(tr("Limpar título", "Limpiar título")) }
                     }
                     if (!loading && error == null) Text(tr("${index.cabeceras.size} publicacións", "${index.cabeceras.size} publicaciones"),
