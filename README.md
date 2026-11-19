@@ -15,6 +15,26 @@ La consulta de documentos necesita conexión. Los derechos de cada documento fig
 
 La app no está en Google Play: se instala con un archivo **APK** que se descarga de esta página. Hace falta **Android 8.0 o posterior**. Los nombres de los menús son los que aparecen con el teléfono en español y pueden cambiar un poco según la marca (Samsung, Xiaomi, Motorola…).
 
+### Antes de empezar: por qué Android avisa, y por qué puedes estar tranquilo
+
+Durante la instalación, Android te mostrará varios avisos. **Es normal y no significa que la app tenga nada malo.** Android avisa de la misma forma con **cualquier** app que no venga de Google Play, porque no puede comprobarla por su cuenta. No está diciendo que sea peligrosa: dice que no la conoce.
+
+Por qué esta app es de fiar:
+
+- **El código está a la vista.** Todo el código de la app está publicado en este repositorio de GitHub, con licencia libre GPL-3.0. Cualquiera puede leerlo, revisarlo o compilarlo por su cuenta.
+- **Se descarga desde la fuente original.** El APK está en las publicaciones oficiales de este repositorio. No lo descargues de otras webs ni de enlaces que te envíen: solo de esta página.
+- **Siempre lleva la misma firma.** Todas las versiones están firmadas con el mismo certificado, y Android comprueba que cada actualización viene del mismo autor. Huella SHA-256 del certificado: `e8285607650d9aa85d9920aa8492da63e2c1ceeac12c7bd11ed0dcfdac0c9880`.
+- **Pide un solo permiso: Internet,** para consultar Galiciana. No accede a tus contactos, fotos, ubicación, micrófono ni cámara.
+- **Sin cuentas, anuncios ni rastreadores.** Tus páginas guardadas, carpetas y notas se quedan en tu teléfono.
+
+Los avisos que vas a ver son estos tres, y en cada paso se explica qué hacer:
+
+- **«Fuentes desconocidas»:** el permiso para instalar apps de fuera de Google Play.
+- **Play Protect:** el antivirus de Google, que no conoce las apps de fuera de Google Play.
+- **Protección avanzada:** solo aparece si la tienes activada.
+
+Al terminar puedes **volver a dejar todas las protecciones como estaban** (paso 8). La app seguirá funcionando igual.
+
 ### 1. Descargar el archivo correcto
 
 1. Abre la [última versión](https://github.com/petoacg/galicianadepeto/releases/latest) en el navegador del móvil.
@@ -47,7 +67,7 @@ Google Play Protect puede mostrar **«App no segura bloqueada»** o **«Desarrol
 1. Toca **Más detalles** (o la flecha pequeña hacia abajo).
 2. Toca **Instalar de todos modos**.
 
-No hace falta desactivar Play Protect. Si te pregunta si quieres **enviar la app para analizarla**, puedes elegir lo que prefieras: no cambia nada para instalarla.
+No hace falta desactivar Play Protect, y no conviene hacerlo: déjalo activado para que siga vigilando el resto de tus apps. Si te pregunta si quieres **enviar la app para analizarla**, puedes elegir lo que prefieras: no cambia nada para instalarla.
 
 ### 5. Si el teléfono tiene la Protección avanzada activada
 
@@ -56,7 +76,7 @@ En Android 16 o posterior, la **Protección avanzada** bloquea por completo inst
 1. Ve a **Ajustes → Seguridad y privacidad → Otros ajustes** (en algunos teléfonos está directamente en Seguridad y privacidad) **→ Protección avanzada**.
 2. Desactívala.
 3. Instala la app siguiendo los pasos 2 a 4.
-4. Si quieres, vuelve a activar la Protección avanzada. Ojo: mientras esté activada, Android no dejará instalar las actualizaciones de la app. Para actualizarla tendrás que desactivarla de nuevo.
+4. Vuelve a activarla en el mismo sitio cuando la app ya esté instalada (lo explica el paso 8). La app seguirá funcionando con ella activada. Ten en cuenta que, mientras esté activada, Android no deja instalar actualizaciones de apps de fuera de Google Play: cuando quieras actualizar Galiciana de Peto, desactívala un momento, actualiza y vuelve a activarla.
 
 En teléfonos **Samsung** hay una protección parecida, el **Bloqueador automático**: **Ajustes → Seguridad y privacidad → Bloqueador automático**. Desactívalo para instalar y vuelve a activarlo después.
 
@@ -67,6 +87,17 @@ Google está introduciendo la verificación de desarrolladores para las apps ins
 ### 7. Abrir la app
 
 Busca el icono **GdPeto** en la pantalla de inicio o en el cajón de aplicaciones. Ya puedes borrar el archivo APK de **Descargas**: no hace falta para usar la app.
+
+### 8. Dejar las protecciones como estaban
+
+Una vez instalada la app, puedes devolver el teléfono a su estado anterior. La app seguirá funcionando igual:
+
+1. **Fuentes desconocidas:** ve a **Ajustes → Aplicaciones → Acceso especial de aplicaciones → Instalar aplicaciones desconocidas**, toca el navegador o el explorador de archivos que usaste y desactiva **Permitir de esta fuente**. Es lo más recomendable: así ninguna web podrá instalar nada sin que tú lo vuelvas a permitir.
+2. **Protección avanzada** (si la desactivaste): **Ajustes → Seguridad y privacidad → (Otros ajustes) → Protección avanzada** y actívala.
+3. **Bloqueador automático de Samsung** (si lo desactivaste): **Ajustes → Seguridad y privacidad → Bloqueador automático** y actívalo.
+4. **Play Protect** no hace falta tocarlo: sigue activado todo el tiempo.
+
+Para instalar una versión nueva más adelante, repite solo lo necesario de los pasos 3 a 5 y vuelve a dejarlo todo como estaba.
 
 ### Actualizar a una versión nueva
 
