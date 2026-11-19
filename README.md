@@ -11,6 +11,8 @@ Galiciana de Peto es una aplicación independiente para consultar la hemeroteca 
 
 La consulta de documentos necesita conexión. Los derechos de cada documento figuran en su ficha original. También hay una [versión web](https://petoacg.github.io/galicianadepeto-web/) que funciona en iPhone, Android y ordenador.
 
+> **¿Prefieres no instalar el APK?** La [versión web](https://petoacg.github.io/galicianadepeto-web/?instalar) se instala en un toque desde Chrome, sin avisos de seguridad, y funciona también en iPhone. Al abrirla te guía en gallego o español.
+
 ## Instalar en Android, paso a paso
 
 La app no está en Google Play: se instala con un archivo **APK** que se descarga de esta página. Hace falta **Android 8.0 o posterior**. Los nombres de los menús son los que aparecen con el teléfono en español y pueden cambiar un poco según la marca (Samsung, Xiaomi, Motorola…).
