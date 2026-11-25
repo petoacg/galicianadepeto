@@ -82,10 +82,10 @@ class SearchSemanticsTest {
     }
 
     @Test fun keyboardWhitespaceDoesNotChangeTheSubmittedQuery() {
-        val expected = "\"carcamo uranga\""
+        val expected = "\"barcena ubeira\""
         assertEquals(expected, normalizeSearchInput("$expected "))
-        assertEquals(expected, normalizeSearchInput("\u200B  “carcamo\u00A0uranga”\u200B "))
-        assertEquals("carcamo uranga", normalizeSearchInput("carcamo\n  uranga  "))
+        assertEquals(expected, normalizeSearchInput("\u200B  “barcena\u00A0ubeira”\u200B "))
+        assertEquals("barcena ubeira", normalizeSearchInput("barcena\n  ubeira  "))
     }
     @Test fun quotedPhraseRequiresAdjacentWordsButAcceptsLineHyphen() {
         assertTrue(containsPhrase("Ma-\nria de la Cruz", "\"María de la\""))
@@ -94,16 +94,16 @@ class SearchSemanticsTest {
     }
 
     @Test fun oneQuotedWordIsLiteralButAThreeWordPhraseToleratesOneOcrLetter() {
-        assertTrue(containsOcrLiteralPhrase("Luciano Cár-\ncamo Uranga", "luciano cárcamo uranga"))
-        assertTrue(containsOcrLiteralPhrase("Luciano Cárcamo Ulanga", "luciano cárcamo uranga"))
-        assertTrue(containsOcrLiteralPhrase("Luciano Cár#camo Uranga", "luciano cárcamo uranga"))
-        assertFalse(containsOcrLiteralPhrase("Ulanga", "uranga"))
-        assertFalse(textContainsQuery("Ulanga", "\"uranga\""))
-        assertTrue(textContainsQuery("Luciano Cárcamo Ulanga", "\"luciano cárcamo uranga\""))
-        assertFalse(containsOcrLiteralPhrase("Luciano Cárcamo Lulanga", "luciano cárcamo uranga"))
-        assertFalse(containsOcrLiteralPhrase("Luciano pintó Cárcamo Uranga", "luciano cárcamo uranga"))
-        assertFalse(containsPhrase("Luciano Cárcomo Ulanga", "\"luciano cárcamo uranga\""))
-        assertEquals(0, countMatches("Luciano Cárcomo Ulanga", "\"luciano cárcamo uranga\""))
+        assertTrue(containsOcrLiteralPhrase("Anselmo Bár-\ncena Ubeira", "anselmo bárcena ubeira"))
+        assertTrue(containsOcrLiteralPhrase("Anselmo Bárcena Ubeila", "anselmo bárcena ubeira"))
+        assertTrue(containsOcrLiteralPhrase("Anselmo Bár#cena Ubeira", "anselmo bárcena ubeira"))
+        assertFalse(containsOcrLiteralPhrase("Ubeila", "ubeira"))
+        assertFalse(textContainsQuery("Ubeila", "\"ubeira\""))
+        assertTrue(textContainsQuery("Anselmo Bárcena Ubeila", "\"anselmo bárcena ubeira\""))
+        assertFalse(containsOcrLiteralPhrase("Anselmo Bárcena Lubeila", "anselmo bárcena ubeira"))
+        assertFalse(containsOcrLiteralPhrase("Anselmo pintó Bárcena Ubeira", "anselmo bárcena ubeira"))
+        assertFalse(containsPhrase("Anselmo Bárcana Ubeila", "\"anselmo bárcena ubeira\""))
+        assertEquals(0, countMatches("Anselmo Bárcana Ubeila", "\"anselmo bárcena ubeira\""))
     }
 
     @Test fun mixedQueryDoesNotConfuseTheSurnameWithCanales() {
@@ -133,41 +133,41 @@ class SearchSemanticsTest {
     }
 
     @Test fun broadenedPhraseMarksSeparateWordsInTheShownExcerpt() {
-        val marked = highlightPossibleTerms("Jorge habló con Cárcamo", "\"jorge carcamo\"")
+        val marked = highlightPossibleTerms("Jorge habló con Bárcena", "\"jorge barcena\"")
         val underlined = marked.spanStyles.map { marked.text.substring(it.start, it.end) }
-        assertEquals(listOf("Jorge", "Cárcamo"), underlined)
+        assertEquals(listOf("Jorge", "Bárcena"), underlined)
     }
 
     @Test fun relevancePrefersNearbyWordsOverScatteredOcrMentions() {
         fun page(vararg snippets: String) = OcrHit(
             title = "Periódico", snippets = snippets.toList(), path = "123", imageId = "45", position = 1,
         )
-        val nearby = page("Jorge Cárcamo asistió al acto")
-        val separated = page("Jorge fue nombrado gobernador y habló después con Cárcamo")
-        val split = page("Jorge habló en el acto", "Cárcamo estuvo presente")
+        val nearby = page("Jorge Bárcena asistió al acto")
+        val separated = page("Jorge fue nombrado gobernador y habló después con Bárcena")
+        val split = page("Jorge habló en el acto", "Bárcena estuvo presente")
         val single = page("Jorge fue nombrado gobernador")
-        assertTrue(pageRelevance(nearby, "Jorge Cárcamo") > pageRelevance(separated, "Jorge Cárcamo"))
-        assertTrue(pageRelevance(separated, "Jorge Cárcamo") > pageRelevance(split, "Jorge Cárcamo"))
-        assertTrue(pageRelevance(split, "Jorge Cárcamo") > pageRelevance(single, "Jorge Cárcamo"))
+        assertTrue(pageRelevance(nearby, "Jorge Bárcena") > pageRelevance(separated, "Jorge Bárcena"))
+        assertTrue(pageRelevance(separated, "Jorge Bárcena") > pageRelevance(split, "Jorge Bárcena"))
+        assertTrue(pageRelevance(split, "Jorge Bárcena") > pageRelevance(single, "Jorge Bárcena"))
     }
 
     @Test fun relevanceAcceptsUnknownMiddleNameButPrefersOrderedProximity() {
         fun page(text: String) = OcrHit(
             title = "Periódico", snippets = listOf(text), path = "123", imageId = "45", position = 1,
         )
-        val nearby = page("Pedro Antonio Luciano Cárcamo Álvarez")
-        val shortened = page("Pedro Cárcamo presentó el documento")
-        val scattered = page("Pedro declaró. Antonio habló con otros vecinos y Cárcamo llegó después")
-        val reversed = page("Cárcamo se reunió con Antonio y Pedro")
-        assertTrue(pageRelevance(nearby, "pedro antonio carcamo") >
-            pageRelevance(scattered, "pedro antonio carcamo"))
-        assertTrue(pageRelevance(nearby, "pedro antonio carcamo") >
-            pageRelevance(reversed, "pedro antonio carcamo"))
+        val nearby = page("Pedro Antonio Anselmo Bárcena Álvarez")
+        val shortened = page("Pedro Bárcena presentó el documento")
+        val scattered = page("Pedro declaró. Antonio habló con otros vecinos y Bárcena llegó después")
+        val reversed = page("Bárcena se reunió con Antonio y Pedro")
+        assertTrue(pageRelevance(nearby, "pedro antonio barcena") >
+            pageRelevance(scattered, "pedro antonio barcena"))
+        assertTrue(pageRelevance(nearby, "pedro antonio barcena") >
+            pageRelevance(reversed, "pedro antonio barcena"))
         // Complete compact evidence leads a partial match, even with an inserted word.
-        assertTrue(pageRelevance(nearby, "pedro antonio carcamo") >
-            pageRelevance(shortened, "pedro antonio carcamo"))
-        assertFalse(hitMatchesQuotedConstraints(nearby, "\"pedro antonio carcamo\""))
-        assertTrue(hitMatchesQuotedConstraints(nearby, "pedro antonio carcamo"))
+        assertTrue(pageRelevance(nearby, "pedro antonio barcena") >
+            pageRelevance(shortened, "pedro antonio barcena"))
+        assertFalse(hitMatchesQuotedConstraints(nearby, "\"pedro antonio barcena\""))
+        assertTrue(hitMatchesQuotedConstraints(nearby, "pedro antonio barcena"))
     }
 
     @Test fun unquotedTwoWordSearchRanksEveryAdjacentOccurrenceAboveScatteredWords() {
@@ -187,14 +187,14 @@ class SearchSemanticsTest {
         fun page(text: String) = OcrHit(
             title = "Periódico", snippets = listOf(text), path = "123", imageId = "45", position = 1,
         )
-        val query = "carlos javier cárcamo agrónomo"
+        val query = "carlos javier bárcena agrónomo"
         val closeWithoutOne = page("Carlos Javier era agrónomo en la comarca")
-        val allScattered = page("Carlos habló; Javier llegó mucho después. Cárcamo publicó una nota. El agrónomo intervino al final")
-        val allTogether = page("Carlos Javier Cárcamo, agrónomo")
+        val allScattered = page("Carlos habló; Javier llegó mucho después. Bárcena publicó una nota. El agrónomo intervino al final")
+        val allTogether = page("Carlos Javier Bárcena, agrónomo")
         assertTrue(pageRelevance(allTogether, query) > pageRelevance(closeWithoutOne, query))
         assertTrue(pageRelevance(closeWithoutOne, query) > pageRelevance(allScattered, query))
         assertTrue(unquotedCandidateQueries(query).any {
-            it.contains("\"carlos javier\"") && it.contains("agrónomo") && !it.contains("cárcamo")
+            it.contains("\"carlos javier\"") && it.contains("agrónomo") && !it.contains("bárcena")
         })
         assertTrue(unquotedCandidateQueries("\"carlos javier\"").isEmpty())
     }
@@ -206,9 +206,9 @@ class SearchSemanticsTest {
         val near = page("Carlos Javier era agrónomo")
         val tooBroad = page("Carlos Javier saludó")
         val canals = page("El ingeniero de canales tomó posesión")
-        assertTrue(plausibleUnquotedHit(near, "carlos javier cárcamo agrónomo"))
-        assertFalse(plausibleUnquotedHit(tooBroad, "carlos javier cárcamo agrónomo"))
-        assertTrue(hitMatchesQuery(near, "carlos javier cárcamo agrónomo"))
+        assertTrue(plausibleUnquotedHit(near, "carlos javier bárcena agrónomo"))
+        assertFalse(plausibleUnquotedHit(tooBroad, "carlos javier bárcena agrónomo"))
+        assertTrue(hitMatchesQuery(near, "carlos javier bárcena agrónomo"))
         assertFalse(hitMatchesQuery(canals, "ingeniero \"canelas\""))
     }
 

@@ -52,9 +52,9 @@ Las pruebas unitarias cubren normalización, límites de coincidencias entrecomi
 
 ## Casos de nombres incompletos y prensa
 
-La búsqueda normal sigue exigiendo todas las palabras. Para `Pedro Antonio Cárcamo Álvarez`, las páginas que solo contienen `Antonio Cárcamo Álvarez` o `Pedro Cárcamo Álvarez` son candidatas a «Buscar coincidencias más amplias»; se generan ambas combinaciones conservando los filtros enviados. La generación está probada, pero no garantiza que el índice remoto devuelva una publicación concreta.
+La búsqueda normal sigue exigiendo todas las palabras. Para `Pedro Antonio Bárcena Álvarez`, las páginas que solo contienen `Antonio Bárcena Álvarez` o `Pedro Bárcena Álvarez` son candidatas a «Buscar coincidencias más amplias»; se generan ambas combinaciones conservando los filtros enviados. La generación está probada, pero no garantiza que el índice remoto devuelva una publicación concreta.
 
-El visor marca cada término sin comillas presente en la página, aunque falte otro. Las frases entrecomilladas no omiten palabras. El ranking, el recuento y el resaltado local reconstruyen cortes como `Cár-` seguido de salto de línea y `camo`. También se reconocen guiones Unicode y metadatos ALTO `HYP`, `HypPart1`/`HypPart2` y `SUBS_CONTENT`.
+El visor marca cada término sin comillas presente en la página, aunque falte otro. Las frases entrecomilladas no omiten palabras. El ranking, el recuento y el resaltado local reconstruyen cortes como `Bár-` seguido de salto de línea y `cena`. También se reconocen guiones Unicode y metadatos ALTO `HYP`, `HypPart1`/`HypPart2` y `SUBS_CONTENT`.
 
 En las coordenadas ALTO las continuaciones entre bloques requieren metadatos explícitos de palabra partida o líneas consecutivas con geometría compatible dentro de la misma columna. No se unen artículos ni columnas independientes. El texto plano no permite deducir por sí solo la disposición de las columnas.
 

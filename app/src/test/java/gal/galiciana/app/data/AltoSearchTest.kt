@@ -28,17 +28,17 @@ class AltoSearchTest {
     }
 
     @Test fun quotedSingleWordStaysLiteralRatherThanFuzzy() {
-        assertEquals(0, repo.parseAltoSearch(alto("Ulanga"), "\"uranga\"").matches.size)
-        assertEquals(1, repo.parseAltoSearch(alto("Cárcamo"), "\"carcamo\"").matches.size)
+        assertEquals(0, repo.parseAltoSearch(alto("Ubeila"), "\"ubeira\"").matches.size)
+        assertEquals(1, repo.parseAltoSearch(alto("Bárcena"), "\"barcena\"").matches.size)
     }
 
     @Test fun phraseUsesTheSharedWholePhraseOcrErrorBudget() {
-        val oneError = "Luciano Cárcamo Ulanga"
-        val twoErrors = "Luciano Cárcomo Ulanga"
-        assertEquals(countMatches(oneError, "\"luciano cárcamo uranga\""),
-            repo.parseAltoSearch(alto("Luciano", "Cárcamo", "Ulanga"), "\"luciano cárcamo uranga\"").matches.size)
-        assertEquals(0, countMatches(twoErrors, "\"luciano cárcamo uranga\""))
-        assertEquals(0, repo.parseAltoSearch(alto("Luciano", "Cárcomo", "Ulanga"), "\"luciano cárcamo uranga\"").matches.size)
+        val oneError = "Anselmo Bárcena Ubeila"
+        val twoErrors = "Anselmo Bárcana Ubeila"
+        assertEquals(countMatches(oneError, "\"anselmo bárcena ubeira\""),
+            repo.parseAltoSearch(alto("Anselmo", "Bárcena", "Ubeila"), "\"anselmo bárcena ubeira\"").matches.size)
+        assertEquals(0, countMatches(twoErrors, "\"anselmo bárcena ubeira\""))
+        assertEquals(0, repo.parseAltoSearch(alto("Anselmo", "Bárcana", "Ubeila"), "\"anselmo bárcena ubeira\"").matches.size)
     }
 
     @Test fun phraseAcrossLinesIsOneOccurrenceWithTwoSmallBoxes() {
@@ -52,9 +52,9 @@ class AltoSearchTest {
     }
 
     @Test fun hyphenatedWordAcrossLinesRetainsBothPartsAsOneMatch() {
-        val xml = alto("Cár-", "camo")
-            .replace("CONTENT=\"camo\" HPOS=\"110\" VPOS=\"20\"", "CONTENT=\"camo\" HPOS=\"10\" VPOS=\"50\"")
-        val result = repo.parseAltoSearch(xml, "\"cárcamo\"")
+        val xml = alto("Bár-", "cena")
+            .replace("CONTENT=\"cena\" HPOS=\"110\" VPOS=\"20\"", "CONTENT=\"cena\" HPOS=\"10\" VPOS=\"50\"")
+        val result = repo.parseAltoSearch(xml, "\"bárcena\"")
         assertEquals(1, result.matches.size)
         assertEquals(2, result.matches.single().boxes.size)
     }
@@ -85,7 +85,7 @@ class AltoSearchTest {
 
     @Test fun unquotedSingleLetterAndSplitWordFollowTextMatcherBoundaries() {
         assertEquals(1, repo.parseAltoSearch(alto("a", "gato"), "a").matches.size)
-        assertEquals(1, repo.parseAltoSearch(alto("Car", "camo"), "Cárcamo").matches.size)
+        assertEquals(1, repo.parseAltoSearch(alto("Bar", "cena"), "Bárcena").matches.size)
         assertEquals(0, repo.parseAltoSearch(alto("gato"), "pato").matches.size)
     }
 
@@ -110,29 +110,29 @@ class AltoSearchTest {
         assertEquals(2, result.matches.single().boxes.size)
     }
     @Test fun unrelatedTextBlocksDoNotJoinHyphensOrPhrases() {
-        val xml = alto("Cár-", "camo")
-            .replace("<String CONTENT=\"camo\"", "</TextLine></TextBlock><TextBlock><TextLine><String CONTENT=\"camo\"")
-        assertEquals(0, repo.parseAltoSearch(xml, "\"Cárcamo\"").matches.size)
-        assertEquals(0, repo.parseAltoSearch(xml, "\"Cár camo\"").matches.size)
-        val split = xml.replace("Cár-", "Car")
-        assertEquals(0, repo.parseAltoSearch(split, "Cárcamo").matches.size)
+        val xml = alto("Bár-", "cena")
+            .replace("<String CONTENT=\"cena\"", "</TextLine></TextBlock><TextBlock><TextLine><String CONTENT=\"cena\"")
+        assertEquals(0, repo.parseAltoSearch(xml, "\"Bárcena\"").matches.size)
+        assertEquals(0, repo.parseAltoSearch(xml, "\"Bár cena\"").matches.size)
+        val split = xml.replace("Bár-", "Bar")
+        assertEquals(0, repo.parseAltoSearch(split, "Bárcena").matches.size)
     }
 
     @Test fun explicitHyphenSubstitutionsRetainOriginalBoxes() {
-        val xml = alto("Cár", "camo")
-            .replace("CONTENT=\"Cár\"", "CONTENT=\"Cár\" SUBS_TYPE=\"HypPart1\" SUBS_CONTENT=\"Cárcamo\"")
-            .replace("CONTENT=\"camo\"", "CONTENT=\"camo\" SUBS_TYPE=\"HypPart2\" SUBS_CONTENT=\"Cárcamo\"")
+        val xml = alto("Bár", "cena")
+            .replace("CONTENT=\"Bár\"", "CONTENT=\"Bár\" SUBS_TYPE=\"HypPart1\" SUBS_CONTENT=\"Bárcena\"")
+            .replace("CONTENT=\"cena\"", "CONTENT=\"cena\" SUBS_TYPE=\"HypPart2\" SUBS_CONTENT=\"Bárcena\"")
             .replace("HPOS=\"110\" VPOS=\"20\"", "HPOS=\"10\" VPOS=\"50\"")
-        val result = repo.parseAltoSearch(xml, "\"cárcamo\"")
+        val result = repo.parseAltoSearch(xml, "\"bárcena\"")
         assertEquals(1, result.matches.size)
         assertEquals(2, result.matches.single().boxes.size)
     }
 
     @Test fun separateHypElementJoinsAcrossTextLinesWithinOneBlock() {
-        val xml = alto("Cár", "camo")
-            .replace("<String CONTENT=\"camo\"", "<HYP CONTENT=\"-\"/></TextLine><TextLine><String CONTENT=\"camo\"")
+        val xml = alto("Bár", "cena")
+            .replace("<String CONTENT=\"cena\"", "<HYP CONTENT=\"-\"/></TextLine><TextLine><String CONTENT=\"cena\"")
             .replace("HPOS=\"110\" VPOS=\"20\"", "HPOS=\"10\" VPOS=\"50\"")
-        val result = repo.parseAltoSearch(xml, "\"Cárcamo\"")
+        val result = repo.parseAltoSearch(xml, "\"Bárcena\"")
         assertEquals(1, result.matches.size)
         assertEquals(2, result.matches.single().boxes.size)
     }
@@ -218,10 +218,10 @@ class AltoSearchTest {
     }
 
     @Test fun standalonePrintedLineEndHyphenStillJoinsTheContinuation() {
-        val xml = alto("Car", "-", "camo")
-            .replace("<String CONTENT=\"camo\"", "</TextLine><TextLine><String CONTENT=\"camo\"")
+        val xml = alto("Bar", "-", "cena")
+            .replace("<String CONTENT=\"cena\"", "</TextLine><TextLine><String CONTENT=\"cena\"")
             .replace("HPOS=\"210\" VPOS=\"20\"", "HPOS=\"10\" VPOS=\"50\"")
-        val result = repo.parseAltoSearch(xml, "\"Cárcamo\"")
+        val result = repo.parseAltoSearch(xml, "\"Bárcena\"")
         assertEquals(1, result.matches.size)
         assertEquals(2, result.matches.single().boxes.size)
     }

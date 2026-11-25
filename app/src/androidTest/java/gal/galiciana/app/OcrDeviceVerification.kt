@@ -31,7 +31,7 @@ class OcrDeviceVerification : Instrumentation() {
                 if (parameters.getString("mode") == "search-matrix") {
                     val repo = OcrRepository()
                     val rows = mutableListOf<String>()
-                    for (query in listOf("carcamo", "pedro carcamo", "pesro carcamo", "\"pedro carcamo\"", "Pedro Antonio Carcamo Alvarez")) {
+                    for (query in listOf("barcena", "pedro barcena", "pesro barcena", "\"pedro barcena\"", "Pedro Antonio Barcena Alvarez")) {
                         try {
                             val found = repo.searchAllPagesDetailed(query, maxPages = 1)
                             rows += "$query: cargadas=${found.hits.size}, obrasAnunciadas=${found.totalWorks}, más=${found.nextUrl != null}, objetivo=${found.hits.any { it.path == "1510028" && it.position == 3 }}"
@@ -40,24 +40,24 @@ class OcrDeviceVerification : Instrumentation() {
                     result.putString("stream", rows.joinToString("\n"))
                     return@runBlocking
                 }
-                if (parameters.getString("mode") == "carcamo-identity") {
+                if (parameters.getString("mode") == "barcena-identity") {
                     val document = gal.galiciana.app.data.MetsRepository().load("1510028")
                     sendStatus(0, Bundle().apply { putString("stream", "\n1510028: ${document.title} · ${document.pages.size} páginas\n") })
                     val repo = OcrRepository()
-                    val query = "Pedro Antonio Carcamo Alvarez"
+                    val query = "Pedro Antonio Barcena Alvarez"
                     val page = repo.searchAllPagesDetailed(query, maxPages = 1)
                     val ordered = gal.galiciana.app.ui.search.sortGroups(repo.groupByWork(page.hits), gal.galiciana.app.ui.search.SearchViewModel.SortBy.Relevancia, false, query)
                     val target = ordered.flatMap { it.pages }.firstOrNull { it.path == "1510028" && it.position == 3 }
                     result.putString("stream", "\nConsulta sin tildes: target=${target != null}; título=${target?.title}; posición entre obras=${ordered.indexOfFirst { g -> g.pages.any { it.path == "1510028" && it.position == 3 } } + 1}; extractos=${target?.snippets?.sortedByDescending { gal.galiciana.app.ui.search.pageRelevance(target.copy(snippets=listOf(it)), query) }?.take(2)}\n")
                     return@runBlocking
                 }
-                if (parameters.getString("mode") == "carcamo-page") {
+                if (parameters.getString("mode") == "barcena-page") {
                     val repo = OcrRepository()
                     val text = repo.loadPage("1510028", 3, null).ocrText
-                    val contexts = Regex("(?i)pedro|c.rcamo|lician").findAll(text).map { text.substring((it.range.first-70).coerceAtLeast(0), (it.range.last+130).coerceAtMost(text.length)) }.toList()
-                    val q = "Pedro Antonio Cárcamo Alvarez"
+                    val contexts = Regex("(?i)pedro|b.rcena|lician").findAll(text).map { text.substring((it.range.first-70).coerceAtLeast(0), (it.range.last+130).coerceAtMost(text.length)) }.toList()
+                    val q = "Pedro Antonio Bárcena Alvarez"
                     val report = StringBuilder("OCR ${text.length} caracteres\n${contexts.joinToString("\n")}\n")
-                    for (query in listOf(q, "Pedro Antonio Cárcamo", "Cárcamo Alvarez")) {
+                    for (query in listOf(q, "Pedro Antonio Bárcena", "Bárcena Alvarez")) {
                         val page = repo.searchAllPagesDetailed(query, maxPages = 1)
                         report.append("$query: ${page.hits.size} resultados, target=${page.hits.any { it.path == "1510028" }}, más=${page.nextUrl != null}\n")
                         val ranked = gal.galiciana.app.ui.search.sortGroups(repo.groupByWork(page.hits),
@@ -401,7 +401,7 @@ class OcrDeviceVerification : Instrumentation() {
                     fun request(full: Boolean) = okhttp3.Request.Builder()
                         .url("$base/es/consulta/resultados_ocr.do")
                         .post(okhttp3.FormBody.Builder().apply {
-                            add("general_ocr", "on"); add("busq_general", "Antonio Carcamo Alvarez")
+                            add("general_ocr", "on"); add("busq_general", "Antonio Barcena Alvarez")
                             if (full) {
                                 listOf("busq_titulo", "busq_autor", "busq_lugaredicion",
                                     "busq_rango0_fechainicial__fechafinal", "busq_rango1_fechainicial__fechafinal")
@@ -415,13 +415,13 @@ class OcrDeviceVerification : Instrumentation() {
                     probe("after-form", request(false).newBuilder().header("User-Agent", "Mozilla/5.0")
                         .header("Referer", "$base/es/consulta/busqueda.do").build())
                     try {
-                        val first = OcrRepository().searchAllPagesDetailed("Antonio Carcamo Alvarez", maxPages = 1)
+                        val first = OcrRepository().searchAllPagesDetailed("Antonio Barcena Alvarez", maxPages = 1)
                         reports += "repository hits=${first.hits.size} sortKeys=${first.sortUrls.keys}"
                         first.sortUrls["Relevancia:S"]?.let { url ->
                             probe("sort-relevance", okhttp3.Request.Builder().url(url).build())
                         }
                     } catch (failure: Exception) { reports += "repository failed=${failure.message}" }
-                    listOf("Pedro Antonio Carcamo Alvarez", "Pedro Carcamo Alvarez").forEach { term ->
+                    listOf("Pedro Antonio Barcena Alvarez", "Pedro Barcena Alvarez").forEach { term ->
                         probe(term, okhttp3.Request.Builder().url("$base/es/consulta/resultados_ocr.do")
                             .post(okhttp3.FormBody.Builder().add("general_ocr", "on").add("busq_general", term).build())
                             .build())
@@ -443,7 +443,7 @@ class OcrDeviceVerification : Instrumentation() {
                 val queries = (if (parameters.getString("mode") == "federation") listOf(
                     "\"Federación Gallega\"", "\"Federación Ga-llega\"", "\"Gallega\"")
                     else if (parameters.getString("mode") == "names") listOfNotNull(
-                    "Pedro Antonio Carcamo Alvarez", "Antonio Carcamo Alvarez", "Pedro Carcamo Alvarez",
+                    "Pedro Antonio Barcena Alvarez", "Antonio Barcena Alvarez", "Pedro Barcena Alvarez",
                     splitQuery) else listOfNotNull(parameters.getString("query"),
                     "\"$presentWord\"", "zzqvxzzqvxzz")).distinct()
                 val reports = queries.map { query ->

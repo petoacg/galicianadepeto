@@ -13,10 +13,10 @@ class SearchHitMergeTest {
     @Test fun duplicatePagesUnionTheirExcerptsWithoutMovingServerOrderOrOtherPages() {
         val first = hit(excerpts = arrayOf("Pedro intervino en otro asunto"))
         val other = hit(path = "other", excerpts = arrayOf("Otra página"))
-        val repeated = first.copy(snippets = listOf("Pedro Antonio Cárcamo Álvarez", "Pedro intervino en otro asunto"), parentTitle = "Boletín")
+        val repeated = first.copy(snippets = listOf("Pedro Antonio Bárcena Álvarez", "Pedro intervino en otro asunto"), parentTitle = "Boletín")
         val result = mergePageHitsByIdentity(listOf(first, other, repeated))
         assertEquals(listOf("1510028", "other"), result.map { it.path })
-        assertEquals(listOf("Pedro intervino en otro asunto", "Pedro Antonio Cárcamo Álvarez"), result.first().snippets)
+        assertEquals(listOf("Pedro intervino en otro asunto", "Pedro Antonio Bárcena Álvarez"), result.first().snippets)
         assertEquals("Boletín", result.first().parentTitle)
     }
 
@@ -31,17 +31,17 @@ class SearchHitMergeTest {
             data-analytics-recordtitle="Boletín de la provincia">Página 3</a>
             <ul class="texto_ocurrencias"><li>$excerpt</li></ul></div>
         """.trimIndent()
-        val units = unit("Pedro intervino en otro asunto") + unit("Pedro Antonio Cárcamo Álvarez")
+        val units = unit("Pedro intervino en otro asunto") + unit("Pedro Antonio Bárcena Álvarez")
         for (html in listOf(units, "<div class='nav_registros'><div class='nav_registro'>$units</div></div>")) {
             val page = OcrRepository().parseHits(html).single()
             assertEquals(2, page.snippets.size)
-            assertTrue(hitMatchesQuotedConstraints(page, "\"Pedro Antonio Cárcamo Álvarez\""))
+            assertTrue(hitMatchesQuotedConstraints(page, "\"Pedro Antonio Bárcena Álvarez\""))
         }
     }
 
     @Test fun exactPhraseFoundDuringRecoveryIsNotSilentlyDropped() {
-        val precise = hit(excerpts = arrayOf("Pedro Antonio Cárcamo Álvarez"))
-        val broad = hit(path = "other", excerpts = arrayOf("Pedro habló con Cárcamo"))
+        val precise = hit(excerpts = arrayOf("Pedro Antonio Bárcena Álvarez"))
+        val broad = hit(path = "other", excerpts = arrayOf("Pedro habló con Bárcena"))
         val selected = selectPageCandidates(listOf(precise, broad), emptyList(), 50)
         assertEquals(listOf(precise, broad), selected.hits)
         assertFalse(selected.truncated)

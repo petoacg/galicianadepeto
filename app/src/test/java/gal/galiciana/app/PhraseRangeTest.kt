@@ -13,20 +13,20 @@ class PhraseRangeTest {
         normalizedOcrWords(text), queryTokens(phrase).map(::lettersOnly))
 
     @Test fun singleQuotedWordRemainsLiteralAndUsesWholeTokens() {
-        assertEquals(listOf(1..1), ranges("Ulanga Uranga Urangas", "Uranga"))
-        assertEquals(listOf(0..0), ranges("Cár-\ncamo", "Cárcamo"))
+        assertEquals(listOf(1..1), ranges("Ubeila Ubeira Ubeiras", "Ubeira"))
+        assertEquals(listOf(0..0), ranges("Bár-\ncena", "Bárcena"))
     }
 
     @Test fun sharedRangesIncludeEveryTokenOfAnUnmarkedOcrSplit() {
-        assertEquals(listOf(0..3), ranges("Luciano Car camo Uranga", "Luciano Cárcamo Uranga"))
-        assertEquals(listOf(1..3), ranges("ayer Luciano Cárcamo Uranga", "Luciano Cárcamo Uranga"))
+        assertEquals(listOf(0..3), ranges("Anselmo Bar cena Ubeira", "Anselmo Bárcena Ubeira"))
+        assertEquals(listOf(1..3), ranges("ayer Anselmo Bárcena Ubeira", "Anselmo Bárcena Ubeira"))
     }
 
     @Test fun phraseStillHasOneGlobalOcrErrorBudgetAndCannotSkipWords() {
-        assertEquals(listOf(0..2), ranges("Luciano Cárcamo Ulanga", "Luciano Cárcamo Uranga"))
-        assertEquals(emptyList<IntRange>(), ranges("Luciano Cárcomo Ulanga", "Luciano Cárcamo Uranga"))
-        assertEquals(emptyList<IntRange>(), ranges("Luciano llegó Cárcamo Uranga", "Luciano Cárcamo Uranga"))
-        assertEquals(listOf(0..2), ranges("Luciano Cár#camo Uranga", "Luciano Cárcamo Uranga"))
+        assertEquals(listOf(0..2), ranges("Anselmo Bárcena Ubeila", "Anselmo Bárcena Ubeira"))
+        assertEquals(emptyList<IntRange>(), ranges("Anselmo Bárcana Ubeila", "Anselmo Bárcena Ubeira"))
+        assertEquals(emptyList<IntRange>(), ranges("Anselmo llegó Bárcena Ubeira", "Anselmo Bárcena Ubeira"))
+        assertEquals(listOf(0..2), ranges("Anselmo Bár#cena Ubeira", "Anselmo Bárcena Ubeira"))
     }
 
     @Test fun repeatedAndOverlappingOccurrencesKeepTheirTokenRanges() {

@@ -19,44 +19,44 @@ class SearchReconstructionTest {
         title = "Periódico", snippets = text.toList(), path = "123", imageId = "45", position = 1)
 
     @Test fun lineHyphenDoesNotRemoveAQueryTermFromSavedResultCoverageOrRanking() {
-        val query = "carlos cárcamo agrónomo"
-        val intact = page("Carlos Cárcamo agrónomo")
-        for (split in listOf("Carlos Cár-\ncamo agrónomo", "Carlos Cár- camo agrónomo",
-            "Carlos Cár‐\r\ncamo agrónomo", "Carlos Cár‑\ncamo agrónomo")) {
+        val query = "carlos bárcena agrónomo"
+        val intact = page("Carlos Bárcena agrónomo")
+        for (split in listOf("Carlos Bár-\ncena agrónomo", "Carlos Bár- cena agrónomo",
+            "Carlos Bár‐\r\ncena agrónomo", "Carlos Bár‑\ncena agrónomo")) {
             assertTrue(split, hitMatchesQuery(page(split), query))
             assertEquals(split, pageRelevance(intact, query), pageRelevance(page(split), query))
-            assertTrue(split, containsStrictQuotedWord(split, "Cárcamo"))
+            assertTrue(split, containsStrictQuotedWord(split, "Bárcena"))
         }
     }
 
     @Test fun approximateHighlightsRetainTheOriginalSplitWordCoordinates() {
-        val text = "Fue Cár-\ncamo quien llegó"
-        val marked = highlightPossibleTerms(text, "cárcamo agrónomo")
+        val text = "Fue Bár-\ncena quien llegó"
+        val marked = highlightPossibleTerms(text, "bárcena agrónomo")
         assertEquals(text, marked.text)
-        assertEquals(listOf("Cár-\ncamo"), marked.spanStyles.map {
+        assertEquals(listOf("Bár-\ncena"), marked.spanStyles.map {
             marked.text.substring(it.start, it.end)
         })
     }
 
     @Test fun separateExcerptsAreNotJoinedAsIfTheyWereAdjacentColumns() {
-        assertFalse(hitMatchesQuery(page("Carlos Cár-", "camo agrónomo"), "\"Carlos Cárcamo\""))
-        assertFalse(hitMatchesQuery(page("Car-", "camo agrónomo"), "cárcamo agrónomo"))
+        assertFalse(hitMatchesQuery(page("Carlos Bár-", "cena agrónomo"), "\"Carlos Bárcena\""))
+        assertFalse(hitMatchesQuery(page("Bar-", "cena agrónomo"), "bárcena agrónomo"))
     }
 
     @Test fun removingOneTermIsOnlyTheExistingSavedResultApproximation() {
         val text = page("Carlos Javier era agrónomo")
-        assertTrue(hitMatchesQuery(text, "Carlos Javier Cárcamo agrónomo"))
-        assertFalse(hitMatchesQuery(text, "Carlos Javier Cárcamo agrónomo médico"))
-        assertFalse(hitMatchesQuery(page("Carlos llegó"), "Carlos Cárcamo"))
-        assertFalse(textContainsQuery("Carlos Javier era agrónomo", "Carlos Javier Cárcamo agrónomo"))
-        assertFalse(hitMatchesQuery(text, "\"Carlos Javier Cárcamo\" agrónomo"))
+        assertTrue(hitMatchesQuery(text, "Carlos Javier Bárcena agrónomo"))
+        assertFalse(hitMatchesQuery(text, "Carlos Javier Bárcena agrónomo médico"))
+        assertFalse(hitMatchesQuery(page("Carlos llegó"), "Carlos Bárcena"))
+        assertFalse(textContainsQuery("Carlos Javier era agrónomo", "Carlos Javier Bárcena agrónomo"))
+        assertFalse(hitMatchesQuery(text, "\"Carlos Javier Bárcena\" agrónomo"))
     }
 
     @Test fun damagedWordCannotMatchOnlyAPrefixOfALongerSearchWord() {
-        assertFalse(tokenMatches("Car#", "cárcamo", 0))
+        assertFalse(tokenMatches("Bar#", "bárcena", 0))
         assertFalse(tokenMatches("adminis#", "administración", 0))
         assertTrue(tokenMatches("adminis#ración", "administración", 0))
-        assertTrue(tokenMatches("Cár#camo", "cárcamo", 0))
+        assertTrue(tokenMatches("Bár#cena", "bárcena", 0))
     }
 
     @Test fun highlightsUseFullUnicodeWordAndNumericBoundaries() {
@@ -67,7 +67,7 @@ class SearchReconstructionTest {
     }
 
     @Test fun quotedPhraseReconstructsLineCutsButNeverSkipsMissingWords() {
-        assertEquals(1, countMatches("Carlos Cár-\ncamo Uranga", "\"Carlos Cárcamo Uranga\""))
-        assertEquals(0, countMatches("Carlos Uranga", "\"Carlos Cárcamo Uranga\""))
+        assertEquals(1, countMatches("Carlos Bár-\ncena Ubeira", "\"Carlos Bárcena Ubeira\""))
+        assertEquals(0, countMatches("Carlos Ubeira", "\"Carlos Bárcena Ubeira\""))
     }
 }

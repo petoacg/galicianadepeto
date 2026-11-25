@@ -40,7 +40,7 @@ class BackupMergeTest {
         assertTrue(BackupMerge.conflicts(result.preferences).isEmpty())
     }
     @Test fun draftAndUnknownConfigConflictsStayLocalAndKeepIncomingConsultable() {
-        val local = mapOf("search_draft_json" to pref(mapOf("query" to "Cárcamo")), "enabled" to BackupPreference.fromRaw(true))
+        val local = mapOf("search_draft_json" to pref(mapOf("query" to "Bárcena")), "enabled" to BackupPreference.fromRaw(true))
         val other = mapOf("search_draft_json" to pref(mapOf("query" to "Núñez")), "enabled" to BackupPreference.fromRaw(false))
         val result = BackupMerge.merge(local, other, 1)
         assertEquals(local.getValue("search_draft_json"), result.preferences.getValue("search_draft_json"))
@@ -55,12 +55,12 @@ class BackupMergeTest {
         assertTrue(BackupMerge.conflicts(result.preferences).any { it.incomingValue == "malformed legacy bytes" })
     }
     @Test fun duplicatePageKeepsBothResearchContextsInsteadOfDroppingIncomingSnippets() {
-        val local = mapOf("fav_json" to pref(listOf(saved("1") + ("q" to "Cárcamo"))))
+        val local = mapOf("fav_json" to pref(listOf(saved("1") + ("q" to "Bárcena"))))
         val otherRecord = saved("1") + mapOf("q" to "Núñez", "snips" to "Otra pista de investigación")
         val other = mapOf("fav_json" to pref(listOf(otherRecord)))
         val preview = BackupMerge.merge(local, other, 1)
         val kept = (parsed(preview.preferences, "fav_json") as List<*>).single() as Map<*, *>
-        assertEquals("Cárcamo", kept["q"])
+        assertEquals("Bárcena", kept["q"])
         val conflict = BackupMerge.conflicts(preview.preferences).single { it.kind == "Contexto de página" }
         assertTrue(conflict.incomingValue.contains("Otra pista de investigación"))
         assertTrue(conflict.incomingValue.contains("Núñez"))

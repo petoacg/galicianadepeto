@@ -6,7 +6,7 @@ import org.junit.Test
 
 class ResearchDossierTest {
     @Test fun preservesResearchTextAndStablePageReferences() {
-        val note = "Cárcamo: ‘familia’\nSegunda línea con comillas \"y\" guiones."
+        val note = "Bárcena: ‘familia’\nSegunda línea con comillas \"y\" guiones."
         val result = ResearchDossier.markdown(listOf(DossierEntry("El pueblo gallego · 1975", "1264535", 15,
             note, "Federación Gallega", listOf("Familia", "Prensa"))))
         assertTrue(result.contains(note)); assertTrue(result.contains("path=1264535"))
